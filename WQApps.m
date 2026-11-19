@@ -488,7 +488,7 @@ static BOOL wq_dir_size_cancellable(NSString *dir, NSString *taskID, WQScanCance
 {
     UITableViewHeaderFooterView *footer = [tableView dequeueReusableHeaderFooterViewWithIdentifier:@"appsFooter"]
         ?: [[UITableViewHeaderFooterView alloc] initWithReuseIdentifier:@"appsFooter"];
-    UIListContentConfiguration *content = [UIListContentConfiguration plainFooterConfiguration];
+    UIListContentConfiguration *content = [UIListContentConfiguration footerConfiguration];
     content.text = [self tableView:tableView titleForFooterInSection:section];
     content.textProperties.numberOfLines = 0;
     footer.contentConfiguration = content;
