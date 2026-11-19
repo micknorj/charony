@@ -68,6 +68,24 @@ static UIViewController *CHTop(UIViewController *controller)
         else return controller;
     }
 }
+static BOOL CHHasMenuView(UIView *view)
+{
+    if (view.hidden || view.alpha < 0.01) return NO;
+    if ([NSStringFromClass(view.class) containsString:@"ContextMenu"] && view.window && view.bounds.size.width > 1) return YES;
+    for (UIView *child in view.subviews) if (CHHasMenuView(child)) return YES;
+    return NO;
+}
+static void CHMenuInteractions(UIView *view, NSMutableArray<UIContextMenuInteraction *> *found)
+{
+    for (id<UIInteraction> interaction in view.interactions)
+        if ([(id)interaction isKindOfClass:UIContextMenuInteraction.class]) [found addObject:(id)interaction];
+    for (UIView *child in view.subviews) CHMenuInteractions(child, found);
+}
+static BOOL CHActivateMenu(UIView *view)
+{
+    for (UIView *child in view.subviews) if (CHActivateMenu(child)) return YES;
+    return [view isKindOfClass:UIControl.class] && [view accessibilityActivate];
+}
 static NSString *CHContainer(NSString *bundle)
 {
     NSString *path = [CHGalleryContainers stringByAppendingPathComponent:NSUUID.UUID.UUIDString];
@@ -157,9 +175,9 @@ static WQCacheItem *CHCacheRow(NSString *name, NSString *bundle)
 {
     [self later:^{
         [self.window layoutIfNeeded];
-        NSDictionary *alerts=@{@"app-clear-confirmation":[NSString stringWithFormat:@"Clear %@?", [[[self.apps valueForKey:@"visibleApps"] firstObject] valueForKey:@"name"]], @"cache-clean-confirmation":@"Clean caches?", @"crash-reports-confirmation":@"Clean caches?", @"crash-reports-only-confirmation":@"Clean caches?", @"operation-in-progress":@"Operation in progress", @"cache-access-limited":@"Not cleanable", @"full-scan-consent":@"Scan app containers?", @"app-clear-success":@"Data cleared", @"app-clear-failure":@"Clear incomplete", @"access-cache-recovery":@"Access cache needs recovery", @"access-cache-reset-failure":@"Recovery incomplete"};
+        NSDictionary *alerts=@{@"app-clear-confirmation":[NSString stringWithFormat:@"Clear %@?", [[[self.apps valueForKey:@"visibleApps"] firstObject] valueForKey:@"name"]], @"cache-clean-confirmation":@"Clean caches?", @"cache-selection-changed":@"Selection changed", @"crash-reports-confirmation":@"Clean caches?", @"crash-reports-only-confirmation":@"Clean caches?", @"operation-in-progress":@"Operation in progress", @"cache-access-limited":@"Not cleanable", @"full-scan-consent":@"Scan app containers?", @"app-clear-success":@"Data cleared", @"app-clear-failure":@"Clear incomplete", @"access-cache-recovery":@"Access cache needs recovery", @"access-cache-reset-failure":@"Recovery incomplete"};
         NSString *expected=alerts[identifier];
-        if (!expected && ![identifier isEqualToString:@"unsupported-build-startup"]) {
+        if (!expected && ![identifier isEqualToString:@"unsupported-build-startup"] && ![identifier isEqualToString:@"apps-sort-filter-menu"]) {
             UIViewController *visible = CHTop(self.window.rootViewController);
             if ([visible isKindOfClass:UISearchController.class]) visible = self.tabs.searchRoot;
             if (visible != self.apps && visible != self.caches) { [self fail:@"Expected a real Apps/Caches controller on screen"]; return; }
@@ -203,6 +221,18 @@ static WQCacheItem *CHCacheRow(NSString *name, NSString *bundle)
     self.appRows = @[CHAppRow(@"Example Notes (fixture)", @"com.example.gallery.notes", first), CHAppRow(@"Example Maps (fixture)", @"com.example.gallery.maps", second)];
     [self publish:@"apps" rows:self.appRows note:nil];
 }
+- (void)seedAlphabetApps
+{
+    NSMutableArray *rows = [NSMutableArray new];
+    for (NSUInteger i = 0; i < 26; i++) {
+        NSString *letter = [NSString stringWithFormat:@"%c", 'A' + (int)i];
+        NSString *bundle = [@"com.example.gallery." stringByAppendingString:letter.lowercaseString];
+        [rows addObject:CHAppRow([letter stringByAppendingString:@" Example (fixture)"], bundle, CHContainer(bundle))];
+    }
+    self.appRows = rows;
+    [self.apps setValue:@YES forKey:@"sortByName"];
+    [self publish:@"apps" rows:rows note:nil];
+}
 - (void)seedCaches
 {
     // Match the controller reset performed when a real fresh scan begins.
@@ -236,6 +266,29 @@ static WQCacheItem *CHCacheRow(NSString *name, NSString *bundle)
         else [self fail:@"UIKit did not expose the fixture-driven alert action; no outcome was invented"];
     }];
 }
+- (void)captureFilterMenu
+{
+    UIView *button = nil;
+    for (UIBarButtonItem *item in self.apps.navigationItem.rightBarButtonItems) {
+        if (!item.menu.children.count) continue;
+        @try { button = [item valueForKey:@"view"]; } @catch (NSException *__unused exception) {}
+    }
+    NSMutableArray<UIContextMenuInteraction *> *interactions = [NSMutableArray new];
+    if (button) { CHMenuInteractions(button, interactions); (void)CHActivateMenu(button); }
+    [self later:^{
+        BOOL visible = NO;
+        for (UIWindow *window in self.window.windowScene.windows)
+            if (!window.hidden && CHHasMenuView(window)) visible = YES;
+        if (!visible) {
+            for (UIContextMenuInteraction *interaction in interactions) [interaction dismissMenu];
+            [self.missing addObject:@{@"state":@"sort-filter-menu-popup", @"reason":@"The native button did not expose a visible menu through accessibility activation; no replacement menu was constructed"}];
+            [self next];
+            return;
+        }
+        self.afterCapture = ^{ for (UIContextMenuInteraction *interaction in interactions) [interaction dismissMenu]; };
+        [self offer:@"apps-sort-filter-menu" title:@"Apps — native Sort and Filter menu" note:@"Actual production bar-button menu, opened through accessibility activation"];
+    }];
+}
 - (void)add:(dispatch_block_t)step { [self.steps addObject:[step copy]]; }
 - (void)buildSteps
 {
@@ -243,9 +296,12 @@ static WQCacheItem *CHCacheRow(NSString *name, NSString *bundle)
     [gallery add:^{ [gallery showTab:0]; [gallery publish:@"apps" rows:@[] note:nil]; [gallery offer:@"apps-initial" title:@"Apps — initial idle fixture" note:nil]; }];
     [gallery add:^{ WQScanTask *task=[WQScanTask taskNamed:@"apps"]; NSUInteger g=[task beginFresh:YES cancel:^{}]; [task progress:@"Finding apps…" fraction:0.28 generation:g]; [gallery offer:@"apps-loading" title:@"Apps — first scan loading" note:@"Fixture scan progress, no completed app model"]; }];
     [gallery add:^{ [gallery seedApps]; [gallery offer:@"apps-populated" title:@"Apps — populated storage rows" note:@"Bundle IDs and sizes are for disposable fixture containers; there is no separate details screen"]; }];
+    [gallery add:^{ [gallery captureFilterMenu]; }];
+    [gallery add:^{ [gallery seedAlphabetApps]; gallery.afterCapture=^{[gallery.apps setValue:@NO forKey:@"sortByName"];}; [gallery offer:@"apps-alphabet-index" title:@"Apps — name sort and alphabet index" note:@"26 distinct disposable containers; actual alphabetical sidebar appears for name-sorted lists of at least 25 rows"]; }];
     [gallery add:^{ NSMutableArray *rows=[gallery.appRows mutableCopy]; NSMutableDictionary *partial=[rows[0] mutableCopy]; partial[@"sizeKnown"]=@NO; rows[0]=partial; [gallery publish:@"apps" rows:rows note:nil]; [gallery offer:@"apps-storage-incomplete" title:@"Apps — incomplete storage measurement" note:@"Fixture measurement has unknown portions; aggregate must be labelled incomplete"]; }];
     [gallery add:^{ [gallery publish:@"apps" rows:@[] note:nil]; [gallery offer:@"apps-empty" title:@"Apps — completed empty list" note:nil]; }];
     [gallery add:^{ WQScanTask *t=[WQScanTask taskNamed:@"apps"]; [t setValue:nil forKey:@"result"]; NSUInteger g=[t beginFresh:YES cancel:^{}]; [t finish:@{@"rows":@[],@"complete":@NO,@"note":@"App discovery failed or was cancelled. Pull to refresh to try again."} generation:g]; [gallery offer:@"apps-error" title:@"Apps — discovery error" note:@"Injected discovery failure; actual controller error presentation"]; }];
+    [gallery add:^{ [gallery seedApps]; WQScanTask *task=[WQScanTask taskNamed:@"apps"]; [task setValue:@YES forKey:@"persistenceFailed"]; [NSNotificationCenter.defaultCenter postNotificationName:WQScanTaskChangedNotification object:task]; gallery.afterCapture=^{[task setValue:@NO forKey:@"persistenceFailed"]; [NSNotificationCenter.defaultCenter postNotificationName:WQScanTaskChangedNotification object:task];}; [gallery offer:@"scan-checkpoint-save-failure" title:@"Apps — checkpoint save warning" note:@"Injected persistence failure flag drives the real Keep charony open navigation prompt"]; }];
     [gallery add:^{ [gallery seedApps]; [gallery search:gallery.apps query:@""]; [gallery offer:@"apps-search-active" title:@"Apps — native Search active" note:nil]; }];
     [gallery add:^{ [gallery search:gallery.apps query:@"Notes"]; [gallery offer:@"apps-search-results" title:@"Apps — search matches" note:nil]; }];
     [gallery add:^{ [gallery search:gallery.apps query:@"no-matching-fixture"]; [gallery offer:@"apps-search-no-results" title:@"Apps — search without matches" note:nil]; }];
@@ -264,8 +320,10 @@ static WQCacheItem *CHCacheRow(NSString *name, NSString *bundle)
     [gallery add:^{ [gallery search:gallery.caches query:@"no-matching-fixture"]; [gallery offer:@"caches-search-no-results" title:@"Caches — no search results" note:nil]; }];
     [gallery add:^{ [gallery showTab:1]; gallery.caches.contextSearchController.searchBar.text=@""; [gallery.caches updateSearchResultsForSearchController:gallery.caches.contextSearchController]; [gallery offer:@"caches-search-dismissed" title:@"Caches — Search dismissed" note:@"Original cache selection stays in the same restored controller"]; }];
     [gallery add:^{ [gallery showTab:1]; gallery.caches.contextSearchController.searchBar.text=@""; [gallery.caches updateSearchResultsForSearchController:gallery.caches.contextSearchController]; [gallery publish:@"clean" rows:@[] note:nil]; [gallery offer:@"caches-empty" title:@"Caches — completed empty list" note:nil]; }];
+    [gallery add:^{ WQScanTask *task=[WQScanTask taskNamed:@"clean"]; NSUInteger g=[task beginFresh:YES cancel:^{}]; [task finish:@{@"rows":@[], @"complete":@NO, @"note":@"Scan incomplete: 1 container enumeration failed; limited rows are excluded; the remaining rows can still be cleaned. Pull to refresh to retry."} generation:g]; [gallery offer:@"caches-scan-error" title:@"Caches — incomplete scan" note:@"Injected failed enumeration uses the production error format; no real protected app was queried"]; }];
     [gallery add:^{ [gallery seedCaches]; gallery.cacheRows[0].limited=YES; gallery.cacheRows[0].cacheKnown=NO; [gallery.caches setValue:gallery.cacheRows forKey:@"items"]; [gallery.caches rebuildVisibleItems]; [gallery.caches.tableView reloadData]; [gallery.caches tableView:gallery.caches.tableView didSelectRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:1]]; [gallery offer:@"cache-access-limited" title:@"Caches — limited-access refusal" note:@"Fixture limited flag drives the real refusal dialog"]; }];
     [gallery add:^{ [gallery dismiss]; [gallery seedCaches]; for(NSUInteger i=0;i<2;i++) [gallery.caches tableView:gallery.caches.tableView didSelectRowAtIndexPath:[NSIndexPath indexPathForRow:(NSInteger)i inSection:1]]; [gallery.caches confirmClean]; [gallery offer:@"cache-clean-confirmation" title:@"Caches — one batch confirmation" note:nil]; }];
+    [gallery add:^{ [gallery dismiss]; [gallery.caches cleanItems:[gallery.caches valueForKey:@"items"] generation:[[gallery.caches valueForKey:@"scanGeneration"] unsignedIntegerValue]+1]; gallery.afterCapture=^{[gallery dismiss];}; [gallery offer:@"cache-selection-changed" title:@"Caches — stale confirmation refused" note:@"Actual generation mismatch; no mutation worker is started"]; }];
     [gallery add:^{ [gallery dismiss]; CHArmOperation(); NSArray *selected=[gallery.caches valueForKey:@"items"]; [gallery.caches cleanItems:selected generation:[[gallery.caches valueForKey:@"scanGeneration"] unsignedIntegerValue]]; [gallery until:^BOOL{return atomic_load(&CHReached);} attempts:150 then:^{ gallery.afterCapture=^{ CHReleaseOperation(); }; [gallery offer:@"cache-clean-progress" title:@"Caches — batch deletion in progress" note:@"Actual disposable-cache purge, held at a fixture boundary"]; }]; }];
     [gallery add:^{ [gallery until:^BOOL{return ![[gallery.caches valueForKey:@"cleaning"] boolValue] && [[gallery.caches valueForKey:@"result"] hasPrefix:@"Freed "];} attempts:150 then:^{ [gallery.caches.tableView reloadData]; [gallery offer:@"cache-clean-success" title:@"Caches — cleaning success" note:@"Actual disposable-file outcome; discovery rescans are fixture-driven"]; }]; }];
     [gallery add:^{ [gallery seedCaches]; CHArmOperation(); [gallery.caches cleanItems:gallery.cacheRows generation:[[gallery.caches valueForKey:@"scanGeneration"] unsignedIntegerValue]]; [gallery until:^BOOL{return atomic_load(&CHReached);} attempts:150 then:^{ [gallery.caches stopClean]; gallery.afterCapture=^{ CHReleaseOperation(); }; [gallery offer:@"cache-clean-stopping" title:@"Caches — Stop requested" note:@"Actual cooperative cancellation requested during disposable-file cleanup"]; }]; }];
@@ -293,8 +351,7 @@ static WQCacheItem *CHCacheRow(NSString *name, NSString *bundle)
     [self.missing addObjectsFromArray:@[
         @{@"state":@"app-details",@"reason":@"No separate app-details screen exists; storage appears in Apps rows"},
         @{@"state":@"successful-real-App-Group-reset",@"reason":@"Simulator fixtures have no authorized protected App Group; actual device access is unverified"},
-        @{@"state":@"real-protected-app-discovery",@"reason":@"Discovery and identities are disposable fixtures; no real user data or sandbox tokens"},
-        @{@"state":@"sort-filter-menu-popup",@"reason":@"The controller exposes the native menu button; popup requires separate touch automation"}]];
+        @{@"state":@"real-protected-app-discovery",@"reason":@"Discovery and identities are disposable fixtures; no real user data or sandbox tokens"}]];
     NSString *documents=NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,NSUserDomainMask,YES).firstObject;
     [NSFileManager.defaultManager createDirectoryAtPath:documents withIntermediateDirectories:YES attributes:nil error:nil];
     CHGalleryContainers=[WQCacheSafetyCanonicalPath(documents) stringByAppendingPathComponent:[@"GalleryFixtures-" stringByAppendingString:NSUUID.UUID.UUIDString]];

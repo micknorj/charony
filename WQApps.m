@@ -222,6 +222,8 @@ static BOOL wq_dir_size_cancellable(NSString *dir, NSString *taskID, WQScanCance
     [super viewDidLoad];
     _fraction = -1;
     self.title = WQLocalizedNullable(@"Apps");
+    self.tableView.sectionHeaderHeight = UITableViewAutomaticDimension;
+    self.tableView.estimatedSectionHeaderHeight = 44;
     self.tableView.sectionFooterHeight = UITableViewAutomaticDimension;
     self.tableView.estimatedSectionFooterHeight = 64;
     UISearchController *search = [[UISearchController alloc] initWithSearchResultsController:nil];
@@ -460,10 +462,20 @@ static BOOL wq_dir_size_cancellable(NSString *dir, NSString *taskID, WQScanCance
 
 - (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section
 {
-    if (!_status || _fraction < 0) return nil;   // plain title header
-    WQProgressHeaderView *header = [tableView dequeueReusableHeaderFooterViewWithIdentifier:@"progress"]
-        ?: [[WQProgressHeaderView alloc] initWithReuseIdentifier:@"progress"];
-    [header setText:_status fraction:_fraction];
+    if (_status && _fraction >= 0) {
+        WQProgressHeaderView *header = [tableView dequeueReusableHeaderFooterViewWithIdentifier:@"progress"]
+            ?: [[WQProgressHeaderView alloc] initWithReuseIdentifier:@"progress"];
+        [header setText:_status fraction:_fraction];
+        return header;
+    }
+    NSString *text = [self tableView:tableView titleForHeaderInSection:section];
+    if (!text.length) return nil;
+    UITableViewHeaderFooterView *header = [tableView dequeueReusableHeaderFooterViewWithIdentifier:@"status"]
+        ?: [[UITableViewHeaderFooterView alloc] initWithReuseIdentifier:@"status"];
+    UIListContentConfiguration *content = [UIListContentConfiguration headerConfiguration];
+    content.text = text;
+    content.textProperties.numberOfLines = 0;
+    header.contentConfiguration = content;
     return header;
 }
 

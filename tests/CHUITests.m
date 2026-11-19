@@ -104,6 +104,12 @@ static void runAppListStateFixtures(void)
     content = (UIListContentConfiguration *)footer.contentConfiguration;
     check(content.textProperties.numberOfLines == 0 && [content.text containsString:@"Safari and Messages"], @"apps-footer-wraps-the-complete-safety-guidance");
     [task finish:@{@"rows": @[], @"complete": @YES} generation:generation];
+    generation = [task beginFresh:YES cancel:^{}];
+    NSString *error = @"App discovery failed or was cancelled. Pull to refresh to try again.";
+    [task finish:@{@"rows": @[], @"complete": @NO, @"note": error} generation:generation];
+    UITableViewHeaderFooterView *header = (UITableViewHeaderFooterView *)[controller tableView:controller.tableView viewForHeaderInSection:0];
+    content = (UIListContentConfiguration *)header.contentConfiguration;
+    check(content.textProperties.numberOfLines == 0 && [content.text isEqualToString:error], @"app-error-header-wraps-the-complete-retry-instruction");
 }
 static WQCacheItem *cacheFixture(NSString *root)
 {

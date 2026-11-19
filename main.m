@@ -11,6 +11,7 @@
 // and scan state in the same controller instance.
 @interface CHTabs : UITabBarController <UITabBarControllerDelegate, UISearchControllerDelegate>
 @property (nonatomic, strong) UITab *contextTab;
+@property (nonatomic, strong) UITab *pendingTab;
 @property (nonatomic, strong) UISearchTab *searchTab;
 @property (nonatomic, strong) UINavigationController *contextNavigation;
 @property (nonatomic, strong) UINavigationController *searchNavigation;
@@ -35,6 +36,7 @@
 - (BOOL)tabBarController:(UITabBarController *)tabBarController shouldSelectTab:(UITab *)tab
 {
     (void)tabBarController;
+    if (tab == self.searchTab && self.pendingTab) return NO;
     if (tab == self.searchTab && self.selectedTab != self.searchTab) {
         self.contextTab = self.selectedTab;
         self.contextNavigation = (UINavigationController *)self.selectedViewController;
@@ -45,6 +47,14 @@
         self.contextNavigation.viewControllers = @[[UIViewController new]];
         self.searchNavigation.viewControllers = @[self.searchRoot];
     } else if (tab != self.searchTab && self.searchRoot) {
+        UISearchController *search = self.searchRoot.navigationItem.searchController;
+        if (search.active || search.presentingViewController || self.pendingTab) {
+            // UIKit must finish dismissing Search before its presenting
+            // controller moves between navigation stacks.
+            self.pendingTab = tab;
+            search.active = NO;
+            return NO;
+        }
         [self restoreContext];
     }
     return YES;
@@ -74,7 +84,8 @@
 {
     (void)searchController;
     if (self.searchRoot) {
-        UITab *context = self.contextTab;
+        UITab *context = self.pendingTab ?: self.contextTab;
+        self.pendingTab = nil;
         [self restoreContext];
         self.selectedTab = context;
     }
