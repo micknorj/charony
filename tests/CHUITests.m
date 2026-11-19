@@ -26,6 +26,50 @@ static void check(BOOL condition, NSString *name)
 @implementation CHFixtureApps
 - (void)scan {}
 @end
+// Wait for genuine UIKit presentation before switching away from Search.
+// The former synchronous test switched tabs before Search became active.
+static void selectFixtureTab(UITabBarController *tabs, UITab *tab)
+{
+    if ([tabs.delegate tabBarController:tabs shouldSelectTab:tab]) {
+        UITab *previous = tabs.selectedTab;
+        tabs.selectedTab = tab;
+        [tabs.delegate tabBarController:tabs didSelectTab:tab previousTab:previous];
+    }
+}
+static void runActiveSearchNavigationFixtures(UITabBarController *tabs, WQAppsViewController *apps,
+                                               UINavigationController *appsNav, dispatch_block_t next)
+{
+    UITab *search = tabs.tabs[2], *appsTab = tabs.tabs[0], *cachesTab = tabs.tabs[1];
+    check([tabs.delegate tabBarController:tabs shouldSelectTab:search], @"search-selection-allowed");
+    UITab *previous = tabs.selectedTab;
+    tabs.selectedTab = search;
+    [tabs.delegate tabBarController:tabs didSelectTab:search previousTab:previous];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+        UISearchController *controller = apps.contextSearchController;
+        check(controller.active && apps.view.window != nil, @"search-is-actually-presented");
+        controller.searchBar.text = @"no-match";
+        [apps updateSearchResultsForSearchController:controller];
+        check([apps.tableView numberOfRowsInSection:0] == 0, @"apps-search-filters-current-context");
+        controller.searchBar.text = @"fixture";
+        [apps updateSearchResultsForSearchController:controller];
+        check([apps.tableView numberOfRowsInSection:0] == 1, @"bundle-and-name-search");
+        selectFixtureTab(tabs, appsTab);
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+            check(tabs.selectedTab == appsTab && appsNav.topViewController == apps, @"same-search-context-restored");
+            check(apps.view.window != nil && [apps.view isDescendantOfView:appsNav.view], @"apps-content-remains-visible-after-active-search");
+            selectFixtureTab(tabs, search);
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+                check(controller.active && apps.view.window != nil, @"search-reopens-after-restoration");
+                selectFixtureTab(tabs, cachesTab);
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+                    check(tabs.selectedTab == cachesTab && appsNav.topViewController == apps, @"original-context-restored");
+                    check(tabs.selectedViewController.view.window != nil, @"cache-content-visible-after-active-search");
+                    next();
+                });
+            });
+        });
+    });
+}
 // Drive real scan notifications without container access. The original
 // harness seeded a completed result before showing Apps, missing first scans.
 static void runAppListStateFixtures(void)
@@ -266,22 +310,7 @@ static void runCacheBatchFixtures(UIWindow *window, dispatch_block_t next)
         [apps loadViewIfNeeded];
         check([apps.tableView numberOfRowsInSection:0] == 1, @"accessible-app-visible-and-inaccessible-app-hidden");
         check(!apps.navigationItem.searchController, @"search-only-in-search-context");
-        UITab *search = tabs.tabs[2];
-        check([tabs.delegate tabBarController:tabs shouldSelectTab:search], @"search-selection-allowed");
-        UITab *previous = tabs.selectedTab;
-        tabs.selectedTab = search;
-        [tabs.delegate tabBarController:tabs didSelectTab:search previousTab:previous];
-        UISearchController *controller = apps.contextSearchController;
-        controller.searchBar.text = @"no-match";
-        [apps updateSearchResultsForSearchController:controller];
-        check([apps.tableView numberOfRowsInSection:0] == 0, @"apps-search-filters-current-context");
-        controller.searchBar.text = @"fixture";
-        [apps updateSearchResultsForSearchController:controller];
-        check([apps.tableView numberOfRowsInSection:0] == 1, @"bundle-and-name-search");
-        UITab *cachesTab = tabs.tabs[1];
-        [tabs.delegate tabBarController:tabs shouldSelectTab:cachesTab];
-        tabs.selectedTab = cachesTab;
-        check(appsNav.topViewController == apps, @"original-context-restored");
+        runActiveSearchNavigationFixtures(tabs, apps, appsNav, ^{
         UINavigationController *cacheNav = (UINavigationController *)tabs.selectedViewController;
         WQCacheCleanerViewController *caches = (WQCacheCleanerViewController *)cacheNav.topViewController;
         [caches loadViewIfNeeded];
@@ -347,6 +376,7 @@ static void runCacheBatchFixtures(UIWindow *window, dispatch_block_t next)
         [apps dismissViewControllerAnimated:NO completion:^{
             runCacheBatchFixtures(self.window, ^{ [self beginLifecycleValidation]; });
         }];
+        });
     });
 }
 - (void)beginLifecycleValidation

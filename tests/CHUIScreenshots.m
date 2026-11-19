@@ -157,8 +157,14 @@ static WQCacheItem *CHCacheRow(NSString *name, NSString *bundle)
 {
     [self later:^{
         [self.window layoutIfNeeded];
-        NSDictionary *alerts=@{@"app-clear-confirmation":[NSString stringWithFormat:@"Clear %@?", [[[self.apps valueForKey:@"visibleApps"] firstObject] valueForKey:@"name"]], @"cache-clean-confirmation":@"Clean caches?", @"crash-reports-confirmation":@"Clean caches?", @"crash-reports-only-confirmation":@"Clean caches?", @"operation-in-progress":@"Operation in progress", @"cache-access-limited":@"Not cleanable", @"full-scan-consent":@"Scan app containers?"};
+        NSDictionary *alerts=@{@"app-clear-confirmation":[NSString stringWithFormat:@"Clear %@?", [[[self.apps valueForKey:@"visibleApps"] firstObject] valueForKey:@"name"]], @"cache-clean-confirmation":@"Clean caches?", @"crash-reports-confirmation":@"Clean caches?", @"crash-reports-only-confirmation":@"Clean caches?", @"operation-in-progress":@"Operation in progress", @"cache-access-limited":@"Not cleanable", @"full-scan-consent":@"Scan app containers?", @"app-clear-success":@"Data cleared", @"app-clear-failure":@"Clear incomplete", @"access-cache-recovery":@"Access cache needs recovery", @"access-cache-reset-failure":@"Recovery incomplete"};
         NSString *expected=alerts[identifier];
+        if (!expected && ![identifier isEqualToString:@"unsupported-build-startup"]) {
+            UIViewController *visible = CHTop(self.window.rootViewController);
+            if ([visible isKindOfClass:UISearchController.class]) visible = self.tabs.searchRoot;
+            if (visible != self.apps && visible != self.caches) { [self fail:@"Expected a real Apps/Caches controller on screen"]; return; }
+            if (!visible.view.window) { [self fail:@"Apps/Caches controller is detached after navigation"]; return; }
+        }
         if(expected && ![CHTop(self.window.rootViewController).title isEqualToString:expected]) { [self fail:[NSString stringWithFormat:@"Expected visible alert %@; found %@", expected, CHTop(self.window.rootViewController).title]]; return; }
         CHWrite(@"capture-state.json", @{@"id":identifier, @"title":title, @"note":note ?: @"Disposable fixture data",
             @"sequence":@(self.sequence), @"fixture":@YES, @"keyboard_visible":@(self.keyboardVisible),
@@ -169,16 +175,19 @@ static WQCacheItem *CHCacheRow(NSString *name, NSString *bundle)
 }
 - (void)dismiss
 {
-    [self.window.rootViewController dismissViewControllerAnimated:NO completion:nil];
-    [self.apps dismissViewControllerAnimated:NO completion:nil];
-    [self.caches dismissViewControllerAnimated:NO completion:nil];
+    // Dismiss only the alert we presented. Dismissing the entire tab hierarchy
+    // while Search is active also dismisses its context mid-transfer.
+    UIViewController *top = CHTop(self.window.rootViewController);
+    if ([top isKindOfClass:UIAlertController.class])
+        [top dismissViewControllerAnimated:NO completion:nil];
 }
+
 - (void)showTab:(NSUInteger)index
 {
     [self dismiss];
     UITab *tab = self.tabs.tabs[index];
-    [self.tabs tabBarController:self.tabs shouldSelectTab:tab];
-    self.tabs.selectedTab = tab;
+    if ([self.tabs tabBarController:self.tabs shouldSelectTab:tab])
+        self.tabs.selectedTab = tab;
     [self.window endEditing:YES];
 }
 - (void)publish:(NSString *)name rows:(NSArray *)rows note:(NSString *)note
@@ -240,6 +249,7 @@ static WQCacheItem *CHCacheRow(NSString *name, NSString *bundle)
     [gallery add:^{ [gallery seedApps]; [gallery search:gallery.apps query:@""]; [gallery offer:@"apps-search-active" title:@"Apps — native Search active" note:nil]; }];
     [gallery add:^{ [gallery search:gallery.apps query:@"Notes"]; [gallery offer:@"apps-search-results" title:@"Apps — search matches" note:nil]; }];
     [gallery add:^{ [gallery search:gallery.apps query:@"no-matching-fixture"]; [gallery offer:@"apps-search-no-results" title:@"Apps — search without matches" note:nil]; }];
+    [gallery add:^{ [gallery showTab:0]; gallery.apps.contextSearchController.searchBar.text=@""; [gallery.apps updateSearchResultsForSearchController:gallery.apps.contextSearchController]; [gallery seedApps]; [gallery offer:@"apps-search-dismissed" title:@"Apps — Search dismissed" note:@"Actual contextual controller must be restored and visible"]; }];
     [gallery add:^{ [gallery showTab:0]; gallery.apps.contextSearchController.searchBar.text=@""; [gallery.apps updateSearchResultsForSearchController:gallery.apps.contextSearchController]; [gallery seedApps]; [gallery.apps tableView:gallery.apps.tableView didSelectRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]]; [gallery offer:@"app-clear-confirmation" title:@"Apps — permanent clearing confirmation" note:@"Actual confirmation; no operation is accepted for this frame"]; }];
     [gallery add:^{ [gallery dismiss]; CHArmOperation(); [gallery.apps clear:[[gallery.apps valueForKey:@"visibleApps"] firstObject]]; [gallery until:^BOOL{return atomic_load(&CHReached);} attempts:150 then:^{ [gallery offer:@"app-clear-progress" title:@"Apps — deletion in progress" note:@"Real deletion of disposable files, paused at a safe fixture boundary for capture"]; }]; }];
     [gallery add:^{ (void)wq_begin_mutation(gallery.apps); gallery.afterCapture=^{ [gallery dismiss]; CHReleaseOperation(); }; [gallery offer:@"operation-in-progress" title:@"Concurrent operation refused" note:@"Actual cross-tab mutation reservation alert"]; }];
@@ -252,13 +262,14 @@ static WQCacheItem *CHCacheRow(NSString *name, NSString *bundle)
     [gallery add:^{ [gallery search:gallery.caches query:@""]; [gallery offer:@"caches-search-active" title:@"Caches — contextual Search active" note:nil]; }];
     [gallery add:^{ [gallery search:gallery.caches query:@"Maps"]; [gallery offer:@"caches-search-results" title:@"Caches — search matches" note:nil]; }];
     [gallery add:^{ [gallery search:gallery.caches query:@"no-matching-fixture"]; [gallery offer:@"caches-search-no-results" title:@"Caches — no search results" note:nil]; }];
+    [gallery add:^{ [gallery showTab:1]; gallery.caches.contextSearchController.searchBar.text=@""; [gallery.caches updateSearchResultsForSearchController:gallery.caches.contextSearchController]; [gallery offer:@"caches-search-dismissed" title:@"Caches — Search dismissed" note:@"Original cache selection stays in the same restored controller"]; }];
     [gallery add:^{ [gallery showTab:1]; gallery.caches.contextSearchController.searchBar.text=@""; [gallery.caches updateSearchResultsForSearchController:gallery.caches.contextSearchController]; [gallery publish:@"clean" rows:@[] note:nil]; [gallery offer:@"caches-empty" title:@"Caches — completed empty list" note:nil]; }];
     [gallery add:^{ [gallery seedCaches]; gallery.cacheRows[0].limited=YES; gallery.cacheRows[0].cacheKnown=NO; [gallery.caches setValue:gallery.cacheRows forKey:@"items"]; [gallery.caches rebuildVisibleItems]; [gallery.caches.tableView reloadData]; [gallery.caches tableView:gallery.caches.tableView didSelectRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:1]]; [gallery offer:@"cache-access-limited" title:@"Caches — limited-access refusal" note:@"Fixture limited flag drives the real refusal dialog"]; }];
     [gallery add:^{ [gallery dismiss]; [gallery seedCaches]; for(NSUInteger i=0;i<2;i++) [gallery.caches tableView:gallery.caches.tableView didSelectRowAtIndexPath:[NSIndexPath indexPathForRow:(NSInteger)i inSection:1]]; [gallery.caches confirmClean]; [gallery offer:@"cache-clean-confirmation" title:@"Caches — one batch confirmation" note:nil]; }];
     [gallery add:^{ [gallery dismiss]; CHArmOperation(); NSArray *selected=[gallery.caches valueForKey:@"items"]; [gallery.caches cleanItems:selected generation:[[gallery.caches valueForKey:@"scanGeneration"] unsignedIntegerValue]]; [gallery until:^BOOL{return atomic_load(&CHReached);} attempts:150 then:^{ gallery.afterCapture=^{ CHReleaseOperation(); }; [gallery offer:@"cache-clean-progress" title:@"Caches — batch deletion in progress" note:@"Actual disposable-cache purge, held at a fixture boundary"]; }]; }];
     [gallery add:^{ [gallery until:^BOOL{return ![[gallery.caches valueForKey:@"cleaning"] boolValue] && [[gallery.caches valueForKey:@"result"] hasPrefix:@"Freed "];} attempts:150 then:^{ [gallery.caches.tableView reloadData]; [gallery offer:@"cache-clean-success" title:@"Caches — cleaning success" note:@"Actual disposable-file outcome; discovery rescans are fixture-driven"]; }]; }];
     [gallery add:^{ [gallery seedCaches]; CHArmOperation(); [gallery.caches cleanItems:gallery.cacheRows generation:[[gallery.caches valueForKey:@"scanGeneration"] unsignedIntegerValue]]; [gallery until:^BOOL{return atomic_load(&CHReached);} attempts:150 then:^{ [gallery.caches stopClean]; gallery.afterCapture=^{ CHReleaseOperation(); }; [gallery offer:@"cache-clean-stopping" title:@"Caches — Stop requested" note:@"Actual cooperative cancellation requested during disposable-file cleanup"]; }]; }];
-    [gallery add:^{ [gallery until:^BOOL{return ![[gallery.caches valueForKey:@"cleaning"] boolValue] && [[gallery.caches valueForKey:@"result"] hasPrefix:@"Stopped."];} attempts:150 then:^{ [gallery.caches.tableView reloadData]; [gallery offer:@"cache-clean-stopped" title:@"Caches — cleaning stopped" note:@"Actual cancellation outcome; partial removal is possible and there is no rollback"]; }]; }];
+    [gallery add:^{ [gallery until:^BOOL{return ![[gallery.caches valueForKey:@"cleaning"] boolValue] && [[gallery.caches valueForKey:@"result"] hasPrefix:@"Stopped."];} attempts:150 then:^{ if([[gallery.caches valueForKey:@"result"] containsString:@"access denied or data changed"]) { [gallery fail:@"User cancellation must not be reported as an access/data-change failure"]; return; } [gallery.caches.tableView reloadData]; [gallery offer:@"cache-clean-stopped" title:@"Caches — cleaning stopped" note:@"Actual cancellation outcome; partial removal is possible and there is no rollback"]; }]; }];
     [gallery add:^{ [gallery seedCaches]; WQCacheItem *item=gallery.cacheRows[0]; NSString *saved=[item.containerPath stringByAppendingString:@"-preserved"]; rename(item.containerPath.fileSystemRepresentation,saved.fileSystemRepresentation); [NSFileManager.defaultManager createDirectoryAtPath:item.containerPath withIntermediateDirectories:YES attributes:nil error:nil]; [gallery.caches cleanItems:gallery.cacheRows generation:[[gallery.caches valueForKey:@"scanGeneration"] unsignedIntegerValue]]; [gallery until:^BOOL{return ![[gallery.caches valueForKey:@"cleaning"] boolValue] && [[gallery.caches valueForKey:@"result"] hasPrefix:@"Clean cancelled:"];} attempts:150 then:^{ [gallery offer:@"cache-clean-failure" title:@"Caches — changed-container failure" note:@"Real whole-batch preflight refusal; preserved fixture data is not deleted"]; }]; }];
     [gallery add:^{ [gallery seedCaches]; NSString *root=[CHGalleryContainers stringByAppendingPathComponent:@"DisposableCrashReporter"]; [NSFileManager.defaultManager createDirectoryAtPath:root withIntermediateDirectories:YES attributes:nil error:nil]; [@"disposable" writeToFile:[root stringByAppendingPathComponent:@"fixture.ips"] atomically:YES encoding:NSUTF8StringEncoding error:nil]; WQCacheFixtureCrashRoots=@[root]; WQCacheItem *reports=[WQCacheItem new]; reports.name=@"Crash Logs"; reports.crashLogs=YES; reports.targets=@[root]; reports.targetRecords=@[WQCacheTargetRecordForPath(root,nil)]; reports.cacheKnown=YES; reports.tempKnown=YES; reports.cacheBytes=4096; [gallery publish:@"clean" rows:[gallery.caches snapshotRows:@[gallery.cacheRows[0],reports] note:nil][@"rows"] note:nil]; for(NSUInteger i=0;i<2;i++) [gallery.caches tableView:gallery.caches.tableView didSelectRowAtIndexPath:[NSIndexPath indexPathForRow:(NSInteger)i inSection:1]]; [gallery offer:@"crash-reports-selected" title:@"Caches — app and crash reports selected" note:@"Crash Logs row uses an allowlisted disposable simulator directory"]; }];
     [gallery add:^{ [gallery.caches confirmClean]; gallery.afterCapture=^{[gallery dismiss];}; [gallery offer:@"crash-reports-confirmation" title:@"Caches — diagnostic-report confirmation" note:@"Actual mixed app/cache and Crash Logs warning; canceled after capture"]; }];

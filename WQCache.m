@@ -1071,8 +1071,8 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
                     break;
                 }
                 if (!wq_purge_contents_validated(record.path, &freed, cancellation, ^BOOL { return WQCacheValidateItem(item, NULL); })) {
-                    allOk = NO;
                     if (cancellation.isCancelled) { cancelled = YES; break; }
+                    allOk = NO;
                     validationFailure = [NSString stringWithFormat:@"%@ could not be fully cleaned because access or data changed", item.name];
                     break;
                 }

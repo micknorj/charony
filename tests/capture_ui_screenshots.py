@@ -130,7 +130,7 @@ def main():
     if not pads:missing.append({'state':'ipad','reason':'No iPad simulator device type was available'})
     metadata={'runtime_version':runtime['version'],'runtime_build':runtime['buildversion'],'capture_complete':False,'commit':run(['git','rev-parse','HEAD'],capture=True),'runtime':args.runtime,
               'workflow_url':f'https://github.com/{os.environ.get("GITHUB_REPOSITORY","micknorj/charony")}/actions/runs/{os.environ.get("GITHUB_RUN_ID","local")}',
-              'capture_method':'xcrun simctl io screenshot','fixture_host':True,'devices':[]}
+              'keyboard_setup':'One-time OS slide-to-type introduction marked as already seen on these disposable simulators','capture_method':'xcrun simctl io screenshot','fixture_host':True,'devices':[]}
     try:
         run(['defaults','write','com.apple.iphonesimulator','ConnectHardwareKeyboard','-bool','NO'])
         for family,definition in devices:
@@ -139,6 +139,12 @@ def main():
             metadata['devices'].append({'family':family,'name':definition['name'],'identifier':definition['identifier'],'udid':device})
             run(['xcrun','simctl','boot',device])
             run(['xcrun','simctl','bootstatus',device,'-b'],timeout=300)
+            # This OS keyboard tip is outside Charony. Record the disposable
+            # simulator as having seen it, without changing application UI.
+            for domain,key in [('com.apple.keyboard.preferences','DidShowGestureKeyboardIntroduction'),
+                               ('com.apple.keyboard.preferences','KeyboardDidShowContinuousPathIntroduction'),
+                               ('com.apple.Preferences','UIKeyboardDidShowContinuousPathIntroduction')]:
+                run(['xcrun','simctl','spawn',device,'defaults','write',domain,key,'-bool','YES'])
             run(['xcrun','simctl','install',device,str(args.app)])
             for appearance in ['light','dark']:
                 for text_size in (['normal','accessibility-extra-extra-extra-large'] if family=='iphone' else ['normal']):
