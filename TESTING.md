@@ -88,7 +88,7 @@ Artifacts are retained for 14 days. Selected diagnostics are uploaded even on fa
 
 Manual dispatch also runs the `gallery` job after normal validation succeeds. It builds a separate simulator fixture host from the production controllers, tab shell, alerts and mutation engines, then captures real PNGs with `simctl`. The host supplies disposable app discovery and fixture identities; it does not demonstrate protected sandbox access or final device signing.
 
-The gallery covers Apps/Caches lists, contextual search, confirmations, real disposable-file mutation outcomes, access errors, scan controls and cold-relaunch recovery. It requests Light/Dark appearance on iPhone and iPad, and the largest accessibility text size on iPhone. Keyboard visibility and actual trait values are recorded. Unsupported or unavailable states are listed explicitly. Capture failures fail the job; they are not replaced with mockups.
+The gallery covers Apps/Caches lists, contextual search, confirmations, real disposable-file mutation outcomes, access errors, scan controls and cold-relaunch recovery. It requests Light/Dark appearance on an available iPhone 11 Pro (iPhone 17 fallback) and iPad, and the largest accessibility text size on iPhone. Keyboard visibility and actual trait values are recorded. Unsupported or unavailable states are listed explicitly. Capture failures fail the job; they are not replaced with mockups.
 
 ```sh
 gh workflow run validate.yml --repo micknorj/charony --ref YOUR_DEVELOPMENT_BRANCH

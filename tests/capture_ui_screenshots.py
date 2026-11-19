@@ -22,7 +22,7 @@ def run(args, *, timeout=180, capture=False, env=None):
     return result.stdout.strip() if capture else ''
 
 
-def capture_states(device, prefix, output):
+def capture_states(device, prefix, output, record):
     data = Path(run(['xcrun', 'simctl', 'get_app_container', device, BUNDLE, 'data'], capture=True))
     documents = data / 'Documents'
     documents.mkdir(exist_ok=True)
@@ -54,6 +54,7 @@ def capture_states(device, prefix, output):
                              height=struct.unpack('>I', contents[20:24])[0],
                              sha256=hashlib.sha256(contents).hexdigest())
                 entries.append(state)
+                record(state)
                 (documents / 'capture-ack.txt').write_text(state['id'])
                 deadline = time.monotonic() + 90
         time.sleep(0.2)
@@ -82,7 +83,7 @@ def index(output, entries, missing, metadata):
     lines=['# Charony UI screenshot gallery', '',
            '**Every PNG is an actual `simctl` capture of running UIKit, using disposable, clearly labelled fixtures.**', '',
            'The fixture host compiles the production controllers, tab shell, alerts and mutation engines from the validated source. Discovery is supplied by fixtures. Operation screenshots use disposable files; this does not verify actual iOS 27.2.1 access or device signing.', '',
-           f'Source: `{metadata["commit"]}`. Workflow: {metadata["workflow_url"]}. Runtime: `{metadata["runtime"]}`.', '',
+           f'Source: `{metadata["commit"]}`. Workflow: {metadata["workflow_url"]}. Runtime: `{metadata["runtime"]}` ({metadata["runtime_version"]}, build {metadata["runtime_build"]}). Capture complete: **{metadata["capture_complete"]}**.', '',
            'No separate app-details screen exists. Storage appears in the Apps rows. The standard lifecycle harness supplies genuine terminate/relaunch recovery frames.', '',
            '## Screenshots', '', '| Device | System appearance | Text size | UI state | PNG |', '| --- | --- | --- | --- | --- |']
     cards=[]
@@ -115,13 +116,19 @@ def main():
     if any(args.output.iterdir()):
         raise RuntimeError('Gallery output must be empty')
     inventory=json.loads(run(['xcrun','simctl','list','devicetypes','--json'],capture=True))['devicetypes']
-    phone=next(d for d in inventory if d['identifier']=='com.apple.CoreSimulator.SimDeviceType.iPhone-17')
+    runtimes=json.loads(run(['xcrun','simctl','list','runtimes','--json'],capture=True))['runtimes']
+    runtime=next(r for r in runtimes if r['identifier']==args.runtime and r['isAvailable'])
+    supported={d['identifier'] for d in runtime['supportedDeviceTypes']}
+    inventory=[d for d in inventory if d['identifier'] in supported]
+    phone=next((d for d in inventory if d['identifier']=='com.apple.CoreSimulator.SimDeviceType.iPhone-11-Pro'), None)
+    if phone is None:
+        phone=next(d for d in inventory if d['identifier']=='com.apple.CoreSimulator.SimDeviceType.iPhone-17')
     pads=[d for d in inventory if d.get('productFamily')=='iPad' or d['name'].startswith('iPad')]
     devices=[('iphone',phone)]
     if pads:devices.append(('ipad',pads[0]))
     entries=[];missing=[];owned=[]
     if not pads:missing.append({'state':'ipad','reason':'No iPad simulator device type was available'})
-    metadata={'commit':run(['git','rev-parse','HEAD'],capture=True),'runtime':args.runtime,
+    metadata={'runtime_version':runtime['version'],'runtime_build':runtime['buildversion'],'capture_complete':False,'commit':run(['git','rev-parse','HEAD'],capture=True),'runtime':args.runtime,
               'workflow_url':f'https://github.com/{os.environ.get("GITHUB_REPOSITORY","micknorj/charony")}/actions/runs/{os.environ.get("GITHUB_RUN_ID","local")}',
               'capture_method':'xcrun simctl io screenshot','fixture_host':True,'devices':[]}
     try:
@@ -139,22 +146,29 @@ def main():
                     size='large' if text_size=='normal' else text_size
                     run(['xcrun','simctl','ui',device,'content_size',size])
                     prefix=f'{family}_{appearance}_{"standard" if text_size=="normal" else "accessibility"}'
-                    captured,gaps=capture_states(device,prefix,args.output)
-                    for entry in captured:entry.update(device=definition['name'],system_appearance=appearance,text_size=text_size)
-                    entries.extend(captured);missing.extend(gaps)
+                    def record(entry):
+                        entry.update(device=definition['name'],system_appearance=appearance,text_size=text_size)
+                        entries.append(entry)
+                        index(args.output,entries,missing,metadata)
+                    _,gaps=capture_states(device,prefix,args.output,record)
+                    missing.extend(gaps)
                     run(['xcrun','simctl','terminate',device,BUNDLE])
                     restored=recovery(device,prefix,args.output)
                     restored.update(device=definition['name'],system_appearance=appearance,text_size=text_size)
                     entries.append(restored)
                     index(args.output,entries,missing,metadata)
             run(['xcrun','simctl','shutdown',device])
+        metadata['capture_complete']=True
+    except Exception as error:
+        missing.append({'state':'capture-aborted','reason':f'{type(error).__name__}: {error}'})
+        raise
     finally:
         for device in owned:
             subprocess.run(['xcrun','simctl','delete',device],check=False)
         index(args.output,entries,missing,metadata)
-    with zipfile.ZipFile(args.output.parent/'charony-ui-gallery.zip','w',zipfile.ZIP_DEFLATED) as archive:
-        for path in sorted(args.output.iterdir()):
-            if path.is_file():archive.write(path,'charony-ui-gallery/'+path.name)
+        with zipfile.ZipFile(args.output.parent/'charony-ui-gallery.zip','w',zipfile.ZIP_DEFLATED) as archive:
+            for path in sorted(args.output.iterdir()):
+                if path.is_file():archive.write(path,'charony-ui-gallery/'+path.name)
     print(f'Captured {len(entries)} actual simulator PNGs; gallery ZIP ready')
 
 
