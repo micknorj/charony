@@ -50,6 +50,10 @@ static void runAppListStateFixtures(void)
     UITableViewCell *cell = [controller tableView:controller.tableView cellForRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]];
     UIListContentConfiguration *content = (UIListContentConfiguration *)cell.contentConfiguration;
     check([content.text isEqualToString:@"Read-only Fixture"], @"refresh-row-renders-existing-model");
+    check([[controller tableView:controller.tableView titleForHeaderInSection:0] containsString:@"1 app ·"], @"single-app-summary-uses-singular");
+    UITableViewHeaderFooterView *footer = (UITableViewHeaderFooterView *)[controller tableView:controller.tableView viewForFooterInSection:0];
+    content = (UIListContentConfiguration *)footer.contentConfiguration;
+    check(content.textProperties.numberOfLines == 0 && [content.text containsString:@"Safari and Messages"], @"apps-footer-wraps-the-complete-safety-guidance");
     [task finish:@{@"rows": @[], @"complete": @YES} generation:generation];
 }
 static WQCacheItem *cacheFixture(NSString *root)

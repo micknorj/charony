@@ -220,6 +220,8 @@ static BOOL wq_dir_size_cancellable(NSString *dir, NSString *taskID, WQScanCance
     [super viewDidLoad];
     _fraction = -1;
     self.title = WQLocalizedNullable(@"Apps");
+    self.tableView.sectionFooterHeight = UITableViewAutomaticDimension;
+    self.tableView.estimatedSectionFooterHeight = 64;
     UISearchController *search = [[UISearchController alloc] initWithSearchResultsController:nil];
     search.searchResultsUpdater = self;
     search.obscuresBackgroundDuringPresentation = NO;
@@ -473,12 +475,24 @@ static BOOL wq_dir_size_cancellable(NSString *dir, NSString *taskID, WQScanCance
     for (WQAppItem *a in _apps) total += a.bytes;
     if (_query.length || _filter > 0)
         return WQLocalizedFormat(@"%lu of %lu apps", (unsigned long)self.visibleApps.count, (unsigned long)_apps.count);
-    return WQLocalizedFormat(@"%lu apps · %@ of app data", (unsigned long)_apps.count, wq_size_text(total));
+    return WQLocalizedFormat(_apps.count == 1 ? @"%lu app · %@ of app data" : @"%lu apps · %@ of app data",
+                             (unsigned long)_apps.count, wq_size_text(total));
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section
 {
     return @"Tap an app to confirm permanent clearing. Close it first. Safari and Messages cleanup is best effort.";
+}
+
+- (UIView *)tableView:(UITableView *)tableView viewForFooterInSection:(NSInteger)section
+{
+    UITableViewHeaderFooterView *footer = [tableView dequeueReusableHeaderFooterViewWithIdentifier:@"appsFooter"]
+        ?: [[UITableViewHeaderFooterView alloc] initWithReuseIdentifier:@"appsFooter"];
+    UIListContentConfiguration *content = [UIListContentConfiguration plainFooterConfiguration];
+    content.text = [self tableView:tableView titleForFooterInSection:section];
+    content.textProperties.numberOfLines = 0;
+    footer.contentConfiguration = content;
+    return footer;
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
