@@ -93,3 +93,37 @@ jobs:
           path: charony.ipa
           if-no-files-found: error
           retention-days: 14
+
+  gallery:
+    if: github.event_name == 'workflow_dispatch'
+    needs: charony
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Verify screenshot toolchain and runtime
+        id: toolchain
+        run: |
+          set -euo pipefail
+          mkdir -p .ci-results
+          python3 scripts/ci_preflight.py --simulator 2>&1 | tee .ci-results/gallery-preflight.log
+      - name: Capture real UIKit states on disposable iPhone and iPad simulators
+        env:
+          SIMULATOR_RUNTIME: ${{ steps.toolchain.outputs.simulator_runtime }}
+        run: |
+          set -euo pipefail
+          bash tests/capture_ui_screenshots.sh 2>&1 | tee .ci-results/gallery.log
+      - name: Retain screenshots, provenance and capture diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: charony-fixture-ui-gallery
+          include-hidden-files: true
+          path: |
+            .work/ui-gallery/
+            .work/charony-ui-gallery.zip
+            .ci-results/
+          if-no-files-found: error
+          retention-days: 14

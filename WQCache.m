@@ -468,9 +468,11 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
         [self rebuildVisibleItems];
     }
     _scanning = _scanTask.running;
+    NSString *note = [result[@"note"] isKindOfClass:NSString.class] ? result[@"note"] : nil;
+    if (!note.length) note = nil;
     _status = _scanning ? (_scanTask.paused ? WQLocalized(@"Scan paused") :
         (_scanTask.status.length ? WQLocalized(_scanTask.status) : WQLocalized(@"Scan queued; previous results kept"))) :
-        (_scanTask.status.length ? WQLocalized(_scanTask.status) : ([result[@"note"] isKindOfClass:NSString.class] ? result[@"note"] : nil));
+        (_scanTask.status.length ? WQLocalized(_scanTask.status) : note);
     if (_scanTask.finishedAt) {
         NSString *date = [NSDateFormatter localizedStringFromDate:_scanTask.finishedAt dateStyle:NSDateFormatterShortStyle timeStyle:NSDateFormatterShortStyle];
         self.navigationItem.prompt = WQLocalizedFormat(@"Last scanned %@ · Pull to refresh", date);

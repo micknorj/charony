@@ -84,11 +84,23 @@ The Charony job requires baseline success. There are no allowed-failure steps. C
 
 Artifacts are retained for 14 days. Selected diagnostics are uploaded even on failure; hidden result/log paths are included. Download needed evidence before expiry. Preserve the run URL, tested SHA, toolchain record, conclusions and remaining gaps when reporting results.
 
+## UI screenshots
+
+Manual dispatch also runs the `gallery` job after normal validation succeeds. It builds a separate simulator fixture host from the production controllers, tab shell, alerts and mutation engines, then captures real PNGs with `simctl`. The host supplies disposable app discovery and fixture identities; it does not demonstrate protected sandbox access or final device signing.
+
+The gallery covers Apps/Caches lists, contextual search, confirmations, real disposable-file mutation outcomes, access errors, scan controls and cold-relaunch recovery. It requests Light/Dark appearance on iPhone and iPad, and the largest accessibility text size on iPhone. Keyboard visibility and actual trait values are recorded. Unsupported or unavailable states are listed explicitly. Capture failures fail the job; they are not replaced with mockups.
+
+```sh
+gh workflow run validate.yml --repo micknorj/charony --ref YOUR_DEVELOPMENT_BRANCH
+```
+
+Download `charony-fixture-ui-gallery` for individually named PNGs, `INDEX.md`, an offline HTML gallery, provenance manifest and ZIP. Generated images stay in ignored `.work` output and are not committed. The regular lifecycle harness remains a required check on every push and pull request; the longer gallery runs only on manual dispatch.
+
 ## Safety coverage
 
 Native fixtures cover access-cache recovery, no-follow path checks, purge boundaries, selected-app scope, identity changes, symlinks, traversal, unrelated-file preservation, cancellation, repeated operations, missing access, scan interruption and checkpoint recovery. Clearing and cleaning must create no backup artifacts.
 
-The simulator uses production controllers with disposable fixture roots. Loading/empty Apps tests drive real task notifications before any completed rows exist and check that every advertised row has a model; refresh must keep existing rows. Cache-row checks cover grouped accessibility content, selected/unselected/limited state and Dynamic Type participation. LaunchServices malformed-input tests cover paths at each short prefix before a possible embedded-plist header, while preserving valid later mappings. It covers fixed crash/cache boundaries, changed-target batch refusal, manual selection, one confirmation, cancellation, unselected sentinels, contextual search/controller restoration, background/foreground handling and cold relaunch. Test-only root overrides are excluded from the production build. These fixtures do not issue real sandbox tokens.
+The simulator uses production controllers with disposable fixture roots. Loading/empty Apps tests drive real task notifications before any completed rows exist and check that every advertised row has a model; refresh must keep existing rows. Normal empty-note snapshots must show Apps totals, cache selection and cleaning results. Footer fixtures require wrapping safety text and singular app counts. Cache-row checks cover grouped accessibility content, selected/unselected/limited state and Dynamic Type participation. LaunchServices malformed-input tests cover paths at each short prefix before a possible embedded-plist header, while preserving valid later mappings. It covers fixed crash/cache boundaries, changed-target batch refusal, manual selection, one confirmation, cancellation, unselected sentinels, contextual search/controller restoration, background/foreground handling and cold relaunch. Test-only root overrides are excluded from the production build. These fixtures do not issue real sandbox tokens.
 
 [docs/SAFETY.md](docs/SAFETY.md) records the destructive-operation model, review fixes and all 21 original portable-test dispositions. Counts alone do not establish equivalent coverage.
 

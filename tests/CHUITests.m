@@ -43,7 +43,7 @@ static void runAppListStateFixtures(void)
     check([controller tableView:controller.tableView numberOfRowsInSection:0] == 0, @"empty-app-refresh-has-no-phantom-row");
     NSDictionary *row = @{@"name": @"Read-only Fixture", @"bundleID": @"com.example.fixture", @"bytes": @123,
                           @"hasAccess": @YES, @"hasIdentity": @YES, @"sizeKnown": @YES};
-    [task finish:@{@"rows": @[row], @"complete": @YES} generation:generation];
+    [task finish:@{@"rows": @[row], @"note": @"", @"complete": @YES} generation:generation];
     check([controller tableView:controller.tableView numberOfRowsInSection:0] == 1, @"completed-app-model-is-visible");
     check([[controller tableView:controller.tableView titleForHeaderInSection:0] containsString:@"1 app ·"], @"single-app-summary-uses-singular");
     generation = [task beginFresh:YES cancel:^{}];
@@ -247,7 +247,7 @@ static void runCacheBatchFixtures(UIWindow *window, dispatch_block_t next)
         NSMutableDictionary *inaccessible = [row mutableCopy];
         inaccessible[@"hasAccess"] = @NO;
         NSArray *rows = [name isEqualToString:@"apps"] ? @[row, inaccessible] : @[row];
-        [task finish:@{@"rows": rows, @"complete": @YES} generation:generation];
+        [task finish:@{@"rows": rows, @"note": @"", @"complete": @YES} generation:generation];
     }
     wq_scan_lifecycle_install();
     self.window = [[UIWindow alloc] initWithWindowScene:(UIWindowScene *)scene];
@@ -282,6 +282,12 @@ static void runCacheBatchFixtures(UIWindow *window, dispatch_block_t next)
         [caches loadViewIfNeeded];
         check([caches.tableView numberOfRowsInSection:1] == 1, @"apps-query-does-not-filter-caches");
         NSArray *items = [caches valueForKey:@"items"];
+        WQSummaryCell *summary = (WQSummaryCell *)[caches tableView:caches.tableView cellForRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]];
+        check([summary.statusLabel.text containsString:@"selected"], @"empty-completed-cache-note-keeps-selection-summary-visible");
+        [caches setValue:@"Freed fixture data." forKey:@"result"];
+        summary = (WQSummaryCell *)[caches tableView:caches.tableView cellForRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]];
+        check([summary.statusLabel.text isEqualToString:@"Freed fixture data."], @"empty-completed-cache-note-keeps-clean-result-visible");
+        [caches setValue:nil forKey:@"result"];
         id item = items.firstObject;
         [item setValue:@NO forKey:@"limited"];
         NSIndexPath *cacheRow = [NSIndexPath indexPathForRow:0 inSection:1];
