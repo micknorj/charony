@@ -304,13 +304,17 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
         _iconView.clipsToBounds = YES;
         _nameLabel = [UILabel new];
         _nameLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleBody];
+        _nameLabel.adjustsFontForContentSizeCategory = YES;
         _nameLabel.lineBreakMode = NSLineBreakByTruncatingMiddle;
         _detailLabel = [UILabel new];
         _detailLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleFootnote];
+        _detailLabel.adjustsFontForContentSizeCategory = YES;
         _detailLabel.textColor = UIColor.secondaryLabelColor;
         _detailLabel.lineBreakMode = NSLineBreakByTruncatingMiddle;
         _sizeLabel = [UILabel new];
-        _sizeLabel.font = [UIFont monospacedDigitSystemFontOfSize:15 weight:UIFontWeightSemibold];
+        _sizeLabel.font = [[UIFontMetrics metricsForTextStyle:UIFontTextStyleFootnote]
+            scaledFontForFont:[UIFont monospacedDigitSystemFontOfSize:15 weight:UIFontWeightSemibold]];
+        _sizeLabel.adjustsFontForContentSizeCategory = YES;
         // Trailing edge in both layout directions.
         _sizeLabel.textAlignment = [UIView userInterfaceLayoutDirectionForSemanticContentAttribute:self.semanticContentAttribute]
             == UIUserInterfaceLayoutDirectionRightToLeft ? NSTextAlignmentLeft : NSTextAlignmentRight;
@@ -362,6 +366,7 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
         self.selectionStyle = UITableViewCellSelectionStyleNone;
         _captionLabel = [UILabel new];
         _captionLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleSubheadline];
+        _captionLabel.adjustsFontForContentSizeCategory = YES;
         _captionLabel.textColor = UIColor.secondaryLabelColor;
         _totalLabel = [UILabel new];
         _totalLabel.font = [[UIFontMetrics metricsForTextStyle:UIFontTextStyleLargeTitle]
@@ -371,6 +376,7 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
         _bar.progressTintColor = UIColor.systemBlueColor;
         _statusLabel = [UILabel new];
         _statusLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleFootnote];
+        _statusLabel.adjustsFontForContentSizeCategory = YES;
         _statusLabel.textColor = UIColor.secondaryLabelColor;
         _statusLabel.numberOfLines = 0;
         _spinner = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleMedium];
@@ -944,6 +950,12 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
     cell.iconView.tintColor = UIColor.secondaryLabelColor;
     cell.checkView.image = [UIImage systemImageNamed:item.selected ? @"checkmark.circle.fill" : @"circle"];
     cell.checkView.tintColor = item.selected ? UIColor.systemBlueColor : UIColor.tertiaryLabelColor;
+    // The selection circle alone does not expose state to VoiceOver. Group
+    // the row's content and publish its current manual-selection state.
+    cell.isAccessibilityElement = YES;
+    cell.accessibilityLabel = [NSString stringWithFormat:@"%@, %@, %@", item.name, cell.detailLabel.text, cell.sizeLabel.text];
+    cell.accessibilityValue = item.limited ? @"Access limited" : item.selected ? @"Selected" : @"Not selected";
+    cell.accessibilityTraits = UIAccessibilityTraitButton | (item.selected ? UIAccessibilityTraitSelected : 0);
     return cell;
 }
 

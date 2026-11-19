@@ -2,7 +2,7 @@
 
 ## Verified baseline
 
-The initial native validation passed on independent root `0e8a450f3b1abeee0ea00101cc5adbf36a6bfdff` in [GitHub Actions run 44574969914](https://github.com/micknorj/charony/actions/runs/44574969914). Both `upstream-baseline` and `charony` succeeded. This is build, fixture and simulator evidence; physical-device behavior remains unverified.
+The reviewed main revision `286782c0e35747f3676de1af23e4b1addabd7944` passed [GitHub Actions run 44606787990](https://github.com/micknorj/charony/actions/runs/44606787990). Both `upstream-baseline` and `charony` succeeded. This is build, fixture and simulator evidence; physical-device behavior remains unverified.
 
 | Check | Result | Platform / evidence |
 | --- | --- | --- |
@@ -88,13 +88,13 @@ Artifacts are retained for 14 days. Selected diagnostics are uploaded even on fa
 
 Native fixtures cover access-cache recovery, no-follow path checks, purge boundaries, selected-app scope, identity changes, symlinks, traversal, unrelated-file preservation, cancellation, repeated operations, missing access, scan interruption and checkpoint recovery. Clearing and cleaning must create no backup artifacts.
 
-The simulator uses production controllers with disposable fixture roots. It covers fixed crash/cache boundaries, changed-target batch refusal, manual selection, one confirmation, cancellation, unselected sentinels, contextual search/controller restoration, background/foreground handling and cold relaunch. Test-only root overrides are excluded from the production build. These fixtures do not issue real sandbox tokens.
+The simulator uses production controllers with disposable fixture roots. Loading/empty Apps tests drive real task notifications before any completed rows exist and check that every advertised row has a model; refresh must keep existing rows. Cache-row checks cover grouped accessibility content, selected/unselected/limited state and Dynamic Type participation. LaunchServices malformed-input tests cover paths at each short prefix before a possible embedded-plist header, while preserving valid later mappings. It covers fixed crash/cache boundaries, changed-target batch refusal, manual selection, one confirmation, cancellation, unselected sentinels, contextual search/controller restoration, background/foreground handling and cold relaunch. Test-only root overrides are excluded from the production build. These fixtures do not issue real sandbox tokens.
 
 [docs/SAFETY.md](docs/SAFETY.md) records the destructive-operation model, review fixes and all 21 original portable-test dispositions. Counts alone do not establish equivalent coverage.
 
 ## Device verification
 
-Physical verification is maintainer-controlled. The intended target is an iPhone 11 Pro on iOS 27.2.1; it has not been tested with Charony.
+Physical verification is maintainer-controlled. The intended target is an iPhone 11 Pro on iOS 27.2.1, build `24B156`; it has not been tested with Charony. That exact build passes the retained patched-build predicate in a regression fixture. This checks the guard decision, not hardware access or signing.
 
 1. Review the final re-signed bundle ID, App Group entitlement and signature. The development values are `io.github.micknorj.charony` and `group.io.github.micknorj.charony`; the signer may assign a different group. Runtime must select the signer's actual usable group.
 2. Begin read-only: launch, verify group/access setup, accessible-app listing, inaccessible-app hiding, icons and size measurement. Check current permission failures and conditional Reset Access Cache.
@@ -103,7 +103,9 @@ Physical verification is maintainer-controlled. The intended target is an iPhone
 5. Test deletion only on an expendable app with disposable data, preferably on a spare supported device. Check exact scope, preserved roots/unrelated files, no backups, cancellation where supported, changed identity, failure reporting and repeat behavior. Never test by deleting live Safari or Messages data.
 6. Verify real asset appearances after layered Icon Composer work is complete. Do not infer Light/Dark/Clear/Tinted icon support from flat PNG compilation.
 
-The intended Windows signing route is AltStore Classic with a free Apple account. Provisioning, refresh and service limits are controlled by Apple and the signer. Installation and App Group preservation remain unverified. If disposable-device testing is unavailable, keep destructive-device behavior marked unverified.
+The intended Windows signing route is [AltStore Classic with AltServer](https://faq.altstore.io/altstore-classic/how-to-install-altstore-windows). Follow its current Windows/iTunes/iCloud, device-trust, Wi-Fi sync and Developer Mode instructions. With a free Apple account, provisioning expires after seven days; refresh before expiry with AltServer available. Apple documents up to three installed apps per device and ten App IDs for Personal Teams; AltStore itself occupies an app slot. See [Apple membership limits](https://developer.apple.com/support/compare-memberships/).
+
+The upstream stable README says AltStore/SideStore can create the required group with free accounts. This is a documented route, not a verified Charony installation. Inspect the final executable entitlements and embedded provisioning profile for an authorized, usable group after re-signing. A copied entitlement string or the CI ad-hoc signature alone is insufficient. Installation and App Group preservation remain unverified. If disposable-device testing is unavailable, keep destructive-device behavior marked unverified.
 
 ## Release checklist
 

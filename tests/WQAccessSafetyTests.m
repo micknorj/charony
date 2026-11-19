@@ -31,6 +31,7 @@ int main(void)
         check(WQWorseQueryPatchedBuild(@"24D5010a"), @"27.4 patched");
         check(WQWorseQueryPatchedBuild(@"25A5300a"), @"iOS 28 patched");
         check(!WQWorseQueryPatchedBuild(@"24B85"), @"27.2.1 not patched");
+        check(!WQWorseQueryPatchedBuild(@"24B156"), @"maintainer target build passes access guard; hardware access remains unverified");
         check(!WQWorseQueryPatchedBuild(@"24A350"), @"27.0.1 not patched");
         check(!WQWorseQueryPatchedBuild(@"23H31"), @"iOS 26 not patched");
         check(!WQWorseQueryPatchedBuild(@""), @"empty build not patched");

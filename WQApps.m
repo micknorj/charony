@@ -449,7 +449,9 @@ static BOOL wq_dir_size_cancellable(NSString *dir, NSString *taskID, WQScanCance
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
 {
-    return (_busy && !_apps.count) ? 1 : (NSInteger)self.visibleApps.count;
+    // Progress belongs to the section header. Every advertised row must have
+    // an app model, including the first scan and a refresh of an empty list.
+    return (NSInteger)self.visibleApps.count;
 }
 
 - (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section

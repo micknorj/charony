@@ -21,6 +21,37 @@ static void check(BOOL condition, NSString *name)
 @implementation CHFixtureCaches
 - (void)scan {}
 @end
+@interface CHFixtureApps : WQAppsViewController
+@end
+@implementation CHFixtureApps
+- (void)scan {}
+@end
+// Drive real scan notifications without container access. The original
+// harness seeded a completed result before showing Apps, missing first scans.
+static void runAppListStateFixtures(void)
+{
+    CHFixtureApps *controller = [CHFixtureApps new];
+    [controller loadViewIfNeeded];
+    WQScanTask *task = [WQScanTask taskNamed:@"apps"];
+    NSUInteger generation = [task beginFresh:YES cancel:^{}];
+    check([controller tableView:controller.tableView numberOfRowsInSection:0] == 0, @"first-app-scan-has-no-phantom-row");
+    [controller.tableView reloadData];
+    [controller.tableView layoutIfNeeded];
+    [task finish:@{@"rows": @[], @"complete": @YES} generation:generation];
+    check([controller tableView:controller.tableView numberOfRowsInSection:0] == 0, @"empty-completed-app-scan-is-safe");
+    generation = [task beginFresh:YES cancel:^{}];
+    check([controller tableView:controller.tableView numberOfRowsInSection:0] == 0, @"empty-app-refresh-has-no-phantom-row");
+    NSDictionary *row = @{@"name": @"Read-only Fixture", @"bundleID": @"com.example.fixture", @"bytes": @123,
+                          @"hasAccess": @YES, @"hasIdentity": @YES, @"sizeKnown": @YES};
+    [task finish:@{@"rows": @[row], @"complete": @YES} generation:generation];
+    check([controller tableView:controller.tableView numberOfRowsInSection:0] == 1, @"completed-app-model-is-visible");
+    generation = [task beginFresh:YES cancel:^{}];
+    check([controller tableView:controller.tableView numberOfRowsInSection:0] == 1, @"refresh-keeps-real-app-row");
+    UITableViewCell *cell = [controller tableView:controller.tableView cellForRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]];
+    UIListContentConfiguration *content = (UIListContentConfiguration *)cell.contentConfiguration;
+    check([content.text isEqualToString:@"Read-only Fixture"], @"refresh-row-renders-existing-model");
+    [task finish:@{@"rows": @[], @"complete": @YES} generation:generation];
+}
 static WQCacheItem *cacheFixture(NSString *root)
 {
     NSFileManager *files = NSFileManager.defaultManager;
@@ -204,6 +235,7 @@ static void runCacheBatchFixtures(UIWindow *window, dispatch_block_t next)
         });
         return;
     }
+    runAppListStateFixtures();
     NSDictionary *row = @{@"name": @"Disposable Fixture", @"bundleID": @"com.example.fixture", @"container": @"/fixture", @"containerPath": @"/fixture", @"hasAccess": @YES, @"hasIdentity": @YES, @"bytes": @123, @"cacheBytes": @123, @"limited": @YES};
     for (NSString *name in @[@"apps", @"clean"]) {
         WQScanTask *task = [WQScanTask taskNamed:name];
@@ -249,11 +281,21 @@ static void runCacheBatchFixtures(UIWindow *window, dispatch_block_t next)
         id item = items.firstObject;
         [item setValue:@NO forKey:@"limited"];
         NSIndexPath *cacheRow = [NSIndexPath indexPathForRow:0 inSection:1];
+        WQCleanerCell *cacheCell = (WQCleanerCell *)[caches tableView:caches.tableView cellForRowAtIndexPath:cacheRow];
+        check(cacheCell.isAccessibilityElement && [cacheCell.accessibilityValue isEqualToString:@"Not selected"], @"cache-row-exposes-unselected-state");
+        check([cacheCell.accessibilityLabel containsString:@"Disposable Fixture"] && (cacheCell.accessibilityTraits & UIAccessibilityTraitButton), @"cache-row-groups-name-and-action");
+        check(cacheCell.nameLabel.adjustsFontForContentSizeCategory && cacheCell.detailLabel.adjustsFontForContentSizeCategory && cacheCell.sizeLabel.adjustsFontForContentSizeCategory, @"cache-labels-follow-dynamic-type");
         [caches tableView:caches.tableView didSelectRowAtIndexPath:cacheRow];
         check([[item valueForKey:@"selected"] boolValue], @"manual-cache-selection");
+        cacheCell = (WQCleanerCell *)[caches tableView:caches.tableView cellForRowAtIndexPath:cacheRow];
+        check([cacheCell.accessibilityValue isEqualToString:@"Selected"] && (cacheCell.accessibilityTraits & UIAccessibilityTraitSelected), @"cache-row-exposes-selected-state");
         [caches tableView:caches.tableView didSelectRowAtIndexPath:cacheRow];
         check(![[item valueForKey:@"selected"] boolValue], @"manual-cache-deselection");
+        cacheCell = (WQCleanerCell *)[caches tableView:caches.tableView cellForRowAtIndexPath:cacheRow];
+        check([cacheCell.accessibilityValue isEqualToString:@"Not selected"] && !(cacheCell.accessibilityTraits & UIAccessibilityTraitSelected), @"cache-row-clears-selected-accessibility-state");
         [item setValue:@YES forKey:@"limited"];
+        cacheCell = (WQCleanerCell *)[caches tableView:caches.tableView cellForRowAtIndexPath:cacheRow];
+        check([cacheCell.accessibilityValue isEqualToString:@"Access limited"], @"limited-cache-row-exposes-refusal-state");
         check(![[items.firstObject valueForKey:@"selected"] boolValue], @"cache-fixture-not-preselected");
         WQScanTask *task = [WQScanTask taskNamed:@"clean"];
         NSUInteger generation = [task beginFresh:YES cancel:^{}];

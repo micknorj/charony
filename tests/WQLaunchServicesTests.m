@@ -403,6 +403,17 @@ static void TestGroupIDsFromEmbeddedPlists(void)
     WQCheck(map[c] == nil);
     WQCheck(map.count == 2);
     WQCheck([wq_ls_group_ids_from_store([NSData data]) count] == 0);
+    // Path-shaped bytes before a complete preceding plist header are not a
+    // group mapping. Exercise every short prefix and the exact boundary.
+    for (NSUInteger prefix = 0; prefix <= 8; prefix++) {
+        NSMutableData *malformed = [NSMutableData dataWithLength:prefix];
+        [malformed appendData:[@"/mobile/Containers/Shared/AppGroup/11111111-2222-3333-4444-555555555555" dataUsingEncoding:NSUTF8StringEncoding]];
+        WQCheck(wq_ls_group_ids_from_store(malformed).count == 0);
+        [malformed appendData:store];
+        NSDictionary *recovered = wq_ls_group_ids_from_store(malformed);
+        WQCheck(recovered.count == 2);
+        WQCheck([recovered[a] isEqualToString:@"group.com.example.a"]);
+    }
 }
 
 int main(void)
