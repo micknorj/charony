@@ -1,36 +1,48 @@
 # Charony project instructions
 
-These instructions apply to `micknorj/charony` and this repository's files. Read `charony-codex-spec.md` completely before changing implementation. Preserve applicable shared engineering principles. The GitHub authorization below is a project-specific exception and does not grant permissions for other repositories or projects.
+These instructions apply only to `micknorj/charony`. Preserve shared engineering principles for other projects. Read [charony-codex-spec.md](charony-codex-spec.md) completely before changing implementation.
 
-## GitHub management authorization
+## GitHub permissions
 
-The maintainer authorized Codex on November 19, 2026 to manage https://github.com/micknorj/charony. This supersedes this project's earlier prohibition on remote Git operations.
+The maintainer authorizes development branches, commits and pushes to those branches, pull requests targeting `main`, GitHub Actions execution and monitoring, CI logs/artifact downloads, fixes and documentation updates for this repository. Read-only remote inspection and fetching are permitted when needed to preserve remote work. The repository description and topics may be updated through the authenticated API.
 
-Codex may create development branches, commit and push to those branches, create and update pull requests targeting `main`, trigger and monitor GitHub Actions, read CI logs, download diagnostic artifacts, fix failures, push corrections and update project documentation. Read-only remote inspection and fetching this repository are permitted when needed to preserve current remote work. The original `charony/initial-ci` commit is retained for recovery. Validate the independent history on a parentless preparation branch before replacing main.
+- Verify repository identity and current write permissions before pushing
+- Use development branches and pull requests; never modify `main` directly
+- Never force-push or rewrite published history
+- Never merge pull requests, publish releases or delete remote branches without explicit maintainer approval
+- Do not enable automatic merging, releasing or deployment
+- Preserve existing implementation, safety-review changes and remote development work
+- Never disable safety tests or bypass failing CI; investigate the cause and treat skipped checks as unverified
+- Never commit credentials, signing material or secrets, or include them in diagnostic artifacts
+- Other account, infrastructure and deployment changes remain outside scope
 
-The maintainer subsequently authorized one history replacement for this repository. After verifying a recoverable backup, live repository identity, owner permissions and fork-network detachment, Codex may create a parentless Charony history and replace `main` once using an explicit `--force-with-lease=refs/heads/main:<verified-old-sha>`. Obsolete remote branches/tags/releases may be removed after inventory, recovery backup and dependency review. Do not delete/recreate the GitHub repository, merge inherited history into the new root or publish a release. This exception ends when the one-time replacement and reviewed cleanup are complete. Other projects remain outside scope.
+The authorized independent-history reset and reviewed cleanup are complete. That one-time exception is expired and cannot be reused, including after a new chat or environment restoration. Do not delete or recreate the repository.
 
-The reviewed pre-migration main tip is `985cf765cdf3bd4cb88da15de3f7d928664efae6`. Recheck it immediately before the one-time update. If it changes, preserve and review the new remote work before proceeding. Once default main contains the independent Charony history, this exception cannot authorize another force update. A later chat or environment restoration does not renew it.
+Prefer connected GitHub tools where supported. Otherwise use existing GitHub CLI/platform authentication. Never print or extract credentials, request a personal access token, or enable unrestricted networking to work around a scoped access failure. Report the concrete blocker and continue independent work.
 
-Charony's repository-local Git identity must be `micknorj <329715135+micknorj@users.noreply.github.com>`. Do not change global Git configuration. Verify the effective author and committer before committing and inspect the new root's stored metadata before pushing. Preserve GPL, copyright notices and upstream acknowledgments regardless of the Git commit graph.
+## Git identity
 
-Before pushing, verify the remote identity and current GitHub write permissions for this repository. Prefer connected GitHub integration tools where supported. Otherwise use the existing HTTPS Git proxy and GitHub CLI authentication. Never print or extract credentials, request a personal access token, or enable unrestricted Internet merely to work around a scoped access failure. Report a concrete permission or network blocker after finishing independent local work.
+Use repository-local identity `micknorj <329715135+micknorj@users.noreply.github.com>` for Charony commits. Do not change global Git configuration or falsify authorship. Check effective identity before committing and stored author/committer metadata before pushing. Preserve GPL licensing, copyright notices and upstream attribution.
 
-The following restrictions remain mandatory.
+## Implementation
 
-- Outside the authorized one-time history replacement, never push directly to `main`, force-push or rewrite published history.
-- Never merge a pull request or publish a release without explicit maintainer approval. Remote branch deletion requires approval outside the reviewed one-time cleanup.
-- Do not enable automatic merge, release or deployment.
-- Never disable safety tests or bypass failing CI. Diagnose failures and fix their causes. Treat skipped checks as unverified.
-- Never introduce credentials, signing material or secrets into source control or diagnostic artifacts.
-- Preserve all existing implementation and safety-review changes. If a remote development branch already exists, inspect it and preserve its work before updating it.
+The stable WQ Files baseline is `e44cd0ef226305bc265c8d7a15607ec49ceb4368` (v0.9.18). Restoration and implementation are complete; do not restore upstream files over Charony or reintroduce later debug changes.
 
-## Implementation and validation
+Baseline verification must remain independent of inherited Git objects. Preserve the pinned source manifest, unchanged upstream runner and nine exact safety-helper comparisons. Do not alter manifests, fixtures or checksums for documentation style.
 
-The implementation baseline is WQ Files stable v0.9.18 at `e44cd0ef226305bc265c8d7a15607ec49ceb4368`. Exclude the later debug source changes. The baseline was already restored before implementation. Do not restore it again over the existing Charony work. New Charony history excludes inherited commits. `tests/upstream-baseline.json` pins the independently downloaded source archive, every source file and executable mode. The unchanged baseline runner and nine safety-helper comparisons must remain active without depending on inherited Charony Git objects.
+Retain the approved Apps/Caches scope, privacy requirements, App Group recovery, container identity and path validation, no-follow deletion, cancellation, scan checkpoints and meaningful safety tests. Stop on contradictory requirements or unresolved safety-critical uncertainty. Destructive tests must use disposable fixtures, never real user data.
 
-Retain the approved Apps/Caches scope, privacy requirements, App Group recovery, container identity and path validation, no-follow deletion safeguards, scan checkpoints and meaningful safety tests. Use disposable fixtures for destructive tests. Never test deletion on real user data.
+## Validation
 
-Run the portable suite with `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -p 'test_*.py' -v` and source auditing with `python3 scripts/privacy_audit.py`. The macOS workflow must run the unchanged stable baseline, native fixtures, strict iOS compile/link checks, simulator checks, source/binary privacy auditing, asset compilation and IPA/metadata/signature/entitlement validation. Keep workflow permissions read-only and application signing ad-hoc. Do not add Apple credentials or signing secrets.
+Run relevant checks and resolve failures without bypasses. Portable checks from the repository root:
 
-Record actual results and unresolved gates in `TESTING.md`. A CI pass does not validate physical-device access, final sideloaded signing or destructive safety on a primary iPhone. Layered icon work and device verification remain separate gates. Provide a final report with branch, PR URL, commit SHA, CI results, fixes, remaining risks and actions requiring approval. Never claim automatic communication with the separate planning conversation.
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -p 'test_*.py' -v
+python3 scripts/privacy_audit.py
+```
+
+The macOS workflow must retain unchanged upstream tests, native safety fixtures, strict iOS compilation/linking, simulator checks, source/binary privacy audits, asset compilation and IPA/metadata/signature/App Group validation. Keep workflow permissions read-only and development signing ad-hoc. Do not add Apple credentials or signing secrets.
+
+Keep actual evidence and open gates in [TESTING.md](TESTING.md). A CI pass does not validate physical access, final sideloaded signing or destructive safety on a primary iPhone. Layered icon appearances remain a separate gate.
+
+Report branch, PR URL, commit SHA, actual CI/test results, fixes, remaining risks and approval requirements in the conversation. Do not commit temporary handoff reports or claim automatic communication with a separate planning conversation.

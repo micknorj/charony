@@ -1,15 +1,25 @@
-charony is a modified version of WQ Files (Worse Query Files) by kolbicz and contributors, based on stable v0.9.18 at e44cd0ef226305bc265c8d7a15607ec49ceb4368. Modifications prepared on November 19, 2026 reduce the product to application data and cache management, remove application logging and networking, change scan persistence, and introduce Charony branding and validation infrastructure.
+# Notices and attribution
 
-WQ Files and this derivative are licensed under GPL-3.0-or-later. The complete GPL text is in LICENSE. Distribute corresponding source for the exact binary, including these modifications and build scripts, and preserve this notice and original source notices.
+## WQ Files
 
-The sandbox technique derives from worse_query by Taj C (forcequit). Container enumeration using fsgetpath derives from KAMUI by murk-sus. The retained container-manager enumeration notes acknowledge terminal_worse. These acknowledgments describe implementation provenance.
+Charony is a modified version of [WQ Files (Worse Query Files)](https://github.com/kolbicz/WQFiles) by kolbicz and contributors, based on stable v0.9.18 at `e44cd0ef226305bc265c8d7a15607ec49ceb4368`.
 
-Upstream and technique sources are available below.
+Modifications began on November 19, 2026. Charony reduces the product to application data and cache management, removes application logging and networking, changes scan persistence, and adds Charony branding and validation infrastructure.
 
-- https://github.com/kolbicz/WQFiles
-- https://github.com/forcequitOS/worse_query
-- https://github.com/murk-sus/kamui-escape
+WQ Files and Charony are licensed under GPL-3.0-or-later. The complete license text is in [LICENSE](LICENSE). Preserve this notice and original source notices, and distribute corresponding source for the exact binary, including modifications and build scripts.
 
-The development moon artwork was generated for charony. Layered Icon Composer artwork remains incomplete.
+## Access techniques
 
-The test-only upstream safety fixture preserves nine unmodified functions from WQ Files stable v0.9.18 under the same GPL-3.0-or-later terms. The pinned baseline manifest records source provenance and checksums for independent testing. These materials are excluded from the application bundle. Charony's independent Git history does not change the original authorship or this attribution.
+- [worse_query](https://github.com/forcequitOS/worse_query) by Taj C (forcequit): sandbox access technique
+- [KAMUI](https://github.com/murk-sus/kamui-escape) by murk-sus: container enumeration using `fsgetpath`
+- terminal_worse: retained container-manager enumeration notes
+
+These acknowledgments describe implementation provenance. Independent Git history does not change the original authorship or licensing obligations.
+
+## Test materials
+
+The test-only upstream safety fixture preserves nine unmodified functions from WQ Files stable v0.9.18 under GPL-3.0-or-later. The pinned baseline manifest records source provenance and checksums for independent testing. These materials and the downloaded baseline are excluded from the application bundle.
+
+## Artwork
+
+The development moon artwork was generated for Charony. Layered Icon Composer artwork remains incomplete.
