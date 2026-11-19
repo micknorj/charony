@@ -38,7 +38,7 @@ flowchart TD
 | `WQUI.m/h` | Serial mutation queue, cross-tab operation reservation, scan yielding, lifecycle handling, native alerts and progress UI |
 | `WQLocalization.m/h` | English string/format compatibility for retained error and interface code |
 
-[`scripts/sources.sh`](scripts/sources.sh) is the compile inventory. Only UIKit, Foundation and Security are linked. There are no third-party runtime SDKs.
+[`scripts/sources.sh`](scripts/sources.sh) is the compile inventory. The build explicitly requests UIKit, Foundation and Security. Apple framework auto-linking also loads CoreFoundation, CoreGraphics and QuartzCore, alongside libSystem and the Objective-C runtime. There are no third-party runtime SDKs.
 
 ## Destructive operations
 
