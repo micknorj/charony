@@ -1,0 +1,3 @@
+# Pinned test-source checksums must survive Windows text checkout settings.
+tests/fixtures/upstream-access-safety.json text eol=lf
+tests/upstream-baseline.json text eol=lf

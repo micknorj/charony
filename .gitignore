@@ -1,0 +1,19 @@
+build/
+*.ipa
+.DS_Store
+tests/.build/
+__pycache__/
+*.py[cod]
+.work/
+.manus/
+outputs/
+.ci-results/
+# Signing material is supplied only by the maintainer's external signing tool.
+*.p12
+*.p8
+*.pem
+*.key
+*.mobileprovision
+*.provisionprofile
+.env
+.env.*

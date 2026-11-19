@@ -1,0 +1,95 @@
+name: Charony validation
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+defaults:
+  run:
+    shell: bash
+env:
+  DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
+  WQ_SKIP_IOS_CHECK: '0'
+  PYTHONDONTWRITEBYTECODE: '1'
+jobs:
+  upstream-baseline:
+    runs-on: macos-26-intel
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify pinned Xcode and SDK availability
+        run: |
+          set -euo pipefail
+          mkdir -p .ci-results
+          python3 scripts/ci_preflight.py 2>&1 | tee .ci-results/preflight.log
+      - name: Run unchanged stable baseline
+        run: |
+          set -euo pipefail
+          BASELINE=$(mktemp -d "$RUNNER_TEMP/charony-baseline.XXXXXX")
+          python3 scripts/baseline_source.py "$BASELINE/source" 2>&1 | tee .ci-results/baseline-source.log
+          bash "$BASELINE/source/tests/run_all_tests.sh" 2>&1 | tee .ci-results/upstream-baseline.log
+      - name: Retain baseline diagnostics even on failure
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: upstream-baseline-diagnostics
+          include-hidden-files: true
+          path: |
+            .ci-results/
+            ${{ runner.temp }}/charony-baseline.*/source/.work/tests/**/*.log
+          if-no-files-found: error
+          retention-days: 14
+  charony:
+    needs: upstream-baseline
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify pinned Xcode, SDK and simulator availability
+        id: toolchain
+        run: |
+          set -euo pipefail
+          mkdir -p .ci-results
+          python3 scripts/ci_preflight.py --simulator 2>&1 | tee .ci-results/preflight.log
+      - name: Host safety fixtures, privacy, strict iOS compilation, assets and IPA
+        run: |
+          set -euo pipefail
+          bash build.sh 2>&1 | tee .ci-results/build.log
+      - name: Create disposable simulator and run UIKit fixtures
+        env:
+          SIMULATOR_RUNTIME: ${{ steps.toolchain.outputs.simulator_runtime }}
+          SIMULATOR_DEVICE_TYPE: ${{ steps.toolchain.outputs.simulator_device_type }}
+        run: |
+          set -euo pipefail
+          DEVICE=$(xcrun simctl create charony-fixtures "$SIMULATOR_DEVICE_TYPE" "$SIMULATOR_RUNTIME")
+          trap 'xcrun simctl delete "$DEVICE"' EXIT
+          xcrun simctl boot "$DEVICE"
+          xcrun simctl bootstatus "$DEVICE" -b
+          WQ_SIMULATOR_UDID="$DEVICE" bash tests/run_scan_ui_tests.sh 2>&1 | tee .ci-results/simulator.log
+      - name: Retain Charony diagnostics even on failure
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: charony-validation-diagnostics
+          include-hidden-files: true
+          path: |
+            .ci-results/
+            .work/tests/**/*.log
+            .work/tests/ui.*/recovery.png
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload development IPA only after all validation succeeds
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: charony-development-unverified-on-device
+          path: charony.ipa
+          if-no-files-found: error
+          retention-days: 14

@@ -1,0 +1,745 @@
+{
+  "archive_sha256": "ff75c08031741926f2c8ea0eae7e73aaa27f683f6b6107eb56bf740626880ad7",
+  "archive_url": "https://codeload.github.com/kolbicz/WQFiles/tar.gz/e44cd0ef226305bc265c8d7a15607ec49ceb4368",
+  "commit": "e44cd0ef226305bc265c8d7a15607ec49ceb4368",
+  "files": {
+    ".gitignore": {
+      "mode": 420,
+      "sha256": "ca5f8b14c990bc90bdde73d743b3125d2d735885831d6d43a5fc968c5913f40d",
+      "size": 84
+    },
+    "Info.plist": {
+      "mode": 420,
+      "sha256": "4bca068c2077d6da6f1aaba0c328772d06b6af47e853982938a6770ad44c0555",
+      "size": 3805
+    },
+    "LICENSE": {
+      "mode": 420,
+      "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+      "size": 35149
+    },
+    "README.md": {
+      "mode": 420,
+      "sha256": "c3a4aae0b1e35c58535a93a2265b375942eaf9b1feb7190c54995d243ca9c41e",
+      "size": 30459
+    },
+    "RELEASE_NOTES_0.6.md": {
+      "mode": 420,
+      "sha256": "ac4d883fd23ae3861c63210459e7c3dfdf8644df9f84a6cb031594268e0d8d25",
+      "size": 4346
+    },
+    "RELEASE_NOTES_0.7.md": {
+      "mode": 420,
+      "sha256": "7ee3ad824e5019078c377847092889f19e6e7fa384eb7f75e1616ce0ceaa0832",
+      "size": 2701
+    },
+    "RELEASE_NOTES_0.8.md": {
+      "mode": 420,
+      "sha256": "6e051fc603f044af15c116964e87c899fc6f3fd67cf0c509008d843b8837be55",
+      "size": 3168
+    },
+    "RELEASE_NOTES_0.9.1.md": {
+      "mode": 420,
+      "sha256": "2788b56cff4f035148a35e002d7c1c271956c8d361c79ffdb4648fff24533788",
+      "size": 2899
+    },
+    "RELEASE_NOTES_0.9.10.md": {
+      "mode": 420,
+      "sha256": "4011e75612cbaf96ef27b917e877826040edba0f7dbab9355f66297e5428be8e",
+      "size": 1208
+    },
+    "RELEASE_NOTES_0.9.11.md": {
+      "mode": 420,
+      "sha256": "0a6874a4c039c6e56547e4c54949990893079407bfcdeb9e0fd5ac652b30f226",
+      "size": 1994
+    },
+    "RELEASE_NOTES_0.9.12.md": {
+      "mode": 420,
+      "sha256": "7b50c89041f192caf0b2309e97a02e7e8913e5cbe06e9ab2a8dcabaaea4b6131",
+      "size": 2690
+    },
+    "RELEASE_NOTES_0.9.13.md": {
+      "mode": 420,
+      "sha256": "85db6789e7de3ad49f944e711e0a6c6c9a7cac925bd87d014d437058155dcca4",
+      "size": 1336
+    },
+    "RELEASE_NOTES_0.9.14.md": {
+      "mode": 420,
+      "sha256": "a21fe83071fb1884542adf4ffa01c5365a631d75cf0946262acae5c4551d1e60",
+      "size": 2706
+    },
+    "RELEASE_NOTES_0.9.15.md": {
+      "mode": 420,
+      "sha256": "636c1097b7abf1334ee1e7b508573b402ecf293673e067169bd96bc8a446fb72",
+      "size": 2051
+    },
+    "RELEASE_NOTES_0.9.16.md": {
+      "mode": 420,
+      "sha256": "549955d98845f12c91f020342367b2853ef385fb58eb034ce0b9f6650906370f",
+      "size": 2124
+    },
+    "RELEASE_NOTES_0.9.17.md": {
+      "mode": 420,
+      "sha256": "0fc8fb127b3eef3bf631f9a579adf0e7e1eec3a7967b7bca05886c405d0abb10",
+      "size": 2781
+    },
+    "RELEASE_NOTES_0.9.18.md": {
+      "mode": 420,
+      "sha256": "266b4ad2294b8ff70e784db0986edb11491b4a33c7186044f489fab1d7a40c32",
+      "size": 3168
+    },
+    "RELEASE_NOTES_0.9.2.md": {
+      "mode": 420,
+      "sha256": "b342af7636a22e669caafae4373778b40aaca229df6aad7aabdb1c6ca8523681",
+      "size": 2107
+    },
+    "RELEASE_NOTES_0.9.3.md": {
+      "mode": 420,
+      "sha256": "3fedd06643b8ca8347172d28628c236fdc669d582d31bda7b78956292185efca",
+      "size": 2214
+    },
+    "RELEASE_NOTES_0.9.4.md": {
+      "mode": 420,
+      "sha256": "e0df0f86a6ae0966c844d6bd3e1890f6bbe2fdd0d08ae689255cbdd2112901ce",
+      "size": 2847
+    },
+    "RELEASE_NOTES_0.9.5.md": {
+      "mode": 420,
+      "sha256": "3bd838b810fc3a22a4bc1d76a493bdabd1842b67c5e06e2bfc51ce0599630d90",
+      "size": 4361
+    },
+    "RELEASE_NOTES_0.9.6.md": {
+      "mode": 420,
+      "sha256": "f556ec69f1c90c196786878c3e745a69b0e1137aafe8d3a61d93a43deab409b9",
+      "size": 3302
+    },
+    "RELEASE_NOTES_0.9.7.md": {
+      "mode": 420,
+      "sha256": "f534d2ba01c1129ffc1bb84b7a4cd1bad75da7ef2529180b0311cd6f9dc23f16",
+      "size": 1600
+    },
+    "RELEASE_NOTES_0.9.8.md": {
+      "mode": 420,
+      "sha256": "2a2d32747ed5323a3767fef54e93a8a1f683e57ef0f0599ae38531a727c54602",
+      "size": 1521
+    },
+    "RELEASE_NOTES_0.9.9.md": {
+      "mode": 420,
+      "sha256": "534a9c0e09d4269f5278ffd016979f814dbb7c34170756a3044f6b7172fccd8c",
+      "size": 2577
+    },
+    "RELEASE_NOTES_0.9.md": {
+      "mode": 420,
+      "sha256": "772c6b2f02340050e305bc828d3bec8fd4d9cc1cb1793c21991a12971fc7b59d",
+      "size": 5135
+    },
+    "WQAccess.h": {
+      "mode": 420,
+      "sha256": "84f9cd6614b3fd77711bbbfc12d33f5773f37320e616889dbd0605107970c6c1",
+      "size": 17286
+    },
+    "WQAccess.m": {
+      "mode": 420,
+      "sha256": "ae5a1a08b06a7551b42b7ef7fc5f9a8f84e0d83cfbf05feccd375c50fa075bb2",
+      "size": 192625
+    },
+    "WQAccessSafety.h": {
+      "mode": 420,
+      "sha256": "99be5606dfda6e8a3be52cb7c3b3416a9b4def238b65ad386eb6d2ab8dee8135",
+      "size": 23826
+    },
+    "WQApps.h": {
+      "mode": 420,
+      "sha256": "f38c0220437e217ed567c1d97e61f6d09eef8260afe503cd7f624758b83ba21b",
+      "size": 514
+    },
+    "WQApps.m": {
+      "mode": 420,
+      "sha256": "63110e2343503d4926d4a225f95c0c7efaf39cd73433f1b311a50115e146090e",
+      "size": 106986
+    },
+    "WQAppsSupport.h": {
+      "mode": 420,
+      "sha256": "170c17bec6417bf608ee2b19af4223e450053aa8f7b53c268455c55346390432",
+      "size": 22838
+    },
+    "WQArchive.h": {
+      "mode": 420,
+      "sha256": "0129d33224ff234c092d2d8b47f63b9f2df85e1e601cd5f1a9790e9448245127",
+      "size": 4107
+    },
+    "WQArchive.m": {
+      "mode": 420,
+      "sha256": "d5a4577b7e3631ef18ce818debe85dbbd1e74b24140fee24939d5d8979056e2d",
+      "size": 29155
+    },
+    "WQCache.h": {
+      "mode": 420,
+      "sha256": "d066713021f8d91bbce355610e29f6cf86364d14ed70b8c25591958d5bb21777",
+      "size": 996
+    },
+    "WQCache.m": {
+      "mode": 420,
+      "sha256": "aaadf2f5b5b096bae8b209e52046430b46dd92cfd263a3eb9093126e0db53e86",
+      "size": 69695
+    },
+    "WQCacheSafety.h": {
+      "mode": 420,
+      "sha256": "2ed814d3ba4124c82df17d55a819200b4bace20c6e715a913a8f317f7d4ac9e6",
+      "size": 5581
+    },
+    "WQCore.h": {
+      "mode": 420,
+      "sha256": "a9031529b85c1955fe6df985bec317f23f2f423a9faee7bd6d0d5b429360daa7",
+      "size": 1695
+    },
+    "WQCore.m": {
+      "mode": 420,
+      "sha256": "d7526d990a57607090b9b0bcd054ddc87d8d2fd0d4e5d70dd63126b1e33ec709",
+      "size": 2746
+    },
+    "WQDir.h": {
+      "mode": 420,
+      "sha256": "80c28104ebbf7588a90bdaffb5dc4f87e343337ac22ee135a138345018da6237",
+      "size": 359
+    },
+    "WQEditing.h": {
+      "mode": 420,
+      "sha256": "a65d4188eb96849a491e0651656b80634316e231c659addf36a1449127579086",
+      "size": 490
+    },
+    "WQHealth.h": {
+      "mode": 420,
+      "sha256": "cef5180d95935365a10eddf03e07d2b2850420eb3e729275895b5cf04b001d26",
+      "size": 2119
+    },
+    "WQHealth.m": {
+      "mode": 420,
+      "sha256": "cafb25ca9edee9c9935a9a2f5bad746c727adaa9189f7fc083d5519f4c28a6de",
+      "size": 9355
+    },
+    "WQHexViewer.h": {
+      "mode": 420,
+      "sha256": "cd2b61e205628f620b2a88b471edc9932aaec1f9b224195b8ab350af958123ef",
+      "size": 490
+    },
+    "WQHexViewer.m": {
+      "mode": 420,
+      "sha256": "bd7c010a501a3911d0ab7affa6876e7a16d641cba1339c828714f591b72641b0",
+      "size": 28591
+    },
+    "WQHexViewerHelpers.h": {
+      "mode": 420,
+      "sha256": "158d5d7bc941b0eb5e0573c7168515983cc3ab052bc4d2a5b1749ba9f7072c60",
+      "size": 2061
+    },
+    "WQInspector.h": {
+      "mode": 420,
+      "sha256": "a4ce33808797238e85c9c2171e98402980942ca3f68cf1e4378cbc05bdbe3e46",
+      "size": 4943
+    },
+    "WQInspector.m": {
+      "mode": 420,
+      "sha256": "2e1a2632be8ea5cf6c877eca5459bddf3fec35f22ca96b70f36aa10d5e16fb05",
+      "size": 22181
+    },
+    "WQLaunchServices.h": {
+      "mode": 420,
+      "sha256": "0134adedb8164324e2a286b516127fd054242e8599b2b1b4cf18ac46c8bc342e",
+      "size": 2328
+    },
+    "WQLaunchServices.m": {
+      "mode": 420,
+      "sha256": "3ff68ef42e57d8534ff3373a49c8f9ff35c9077c7cbaf1cdae4e7430c0c97f35",
+      "size": 80990
+    },
+    "WQLocalization.h": {
+      "mode": 420,
+      "sha256": "6848ebac1ca12c1fbdc4b9bfa094cee3c7ad22c580d9832c268e44fc1f4db55e",
+      "size": 1236
+    },
+    "WQLocalization.m": {
+      "mode": 420,
+      "sha256": "3317f05f413abb43ab3d3bc540d1b995da3ab3f7b83dff940613f8a212e21d88",
+      "size": 1425
+    },
+    "WQMediaStream.h": {
+      "mode": 420,
+      "sha256": "4d4d75197652c7a1173bdb3e1626665fc7c56e0a9121f02d696d999d8bc3be83",
+      "size": 2762
+    },
+    "WQMediaStream.m": {
+      "mode": 420,
+      "sha256": "7785d22f38c2b1680d8bc842ff35fe40984c4632b331423ead2f5abeabea3825",
+      "size": 8630
+    },
+    "WQPlistEditor.h": {
+      "mode": 420,
+      "sha256": "254ba0adc23545d75422c4a924e8bf2e8a6b291a6c598d6c79a83a62cd3dc1c7",
+      "size": 770
+    },
+    "WQPlistEditor.m": {
+      "mode": 420,
+      "sha256": "aef460fb3aa4c7cb5c9f5ecfa73fe1d3bb65f4f8016dbc6ee33a1091ce608b2d",
+      "size": 34563
+    },
+    "WQPlistEditorSupport.h": {
+      "mode": 420,
+      "sha256": "50f594204ee4f89bc4aa727b1256908d5299ae1ce9c329d8649fce014e2ed218",
+      "size": 7751
+    },
+    "WQSQLiteSave.h": {
+      "mode": 420,
+      "sha256": "b369aca00a3cf4a8f9fc2e7d734a13e7c186dd50fe94417a299a00f2002e57ea",
+      "size": 2048
+    },
+    "WQSQLiteSave.m": {
+      "mode": 420,
+      "sha256": "b9353b08eef8ce6a624a9da1923f7868d337d5d1e991beacfb12e9a8c08b27c9",
+      "size": 12449
+    },
+    "WQSQLiteSupport.h": {
+      "mode": 420,
+      "sha256": "611ab86c5e7bfa0193a947917baeb0a4ef2848f81a7554bd8f95e9b2d099acb3",
+      "size": 10309
+    },
+    "WQSQLiteViewer.h": {
+      "mode": 420,
+      "sha256": "049f1e5a1382a71be5b965ac72cb0e1598b9eebb6bbe2a6635454a0778a1fb49",
+      "size": 750
+    },
+    "WQSQLiteViewer.m": {
+      "mode": 420,
+      "sha256": "32dddd1624fb62fc0c3624cdfe80a420ac8397a23e19136ef4b8781fb9027d71",
+      "size": 53806
+    },
+    "WQScanJournal.h": {
+      "mode": 420,
+      "sha256": "17d18a6014eb2ae42b718bd8a7d208b839fdd91648162f097a380348211bc173",
+      "size": 4219
+    },
+    "WQScanTask.h": {
+      "mode": 420,
+      "sha256": "c2cbe2fd4a82478f3bb9e09b857fc8bcde278f36d03b64d53715bef30cf9ffd9",
+      "size": 1587
+    },
+    "WQScanTask.m": {
+      "mode": 420,
+      "sha256": "6a398f7bd1cc212e14949fc5c9b98d5cd7df73d4d5aa0da2f2506ce1eccdcb52",
+      "size": 4708
+    },
+    "WQSharing.h": {
+      "mode": 420,
+      "sha256": "34c064c65f7c93dee392b8731e936813d2883b052314b0ee70e2452b42b4d86b",
+      "size": 575
+    },
+    "WQSharing.m": {
+      "mode": 420,
+      "sha256": "fae96b62b928565bfa83e2b0b3c48bee1eaed35b30220c5872465ce13ccaacfc",
+      "size": 13238
+    },
+    "WQSyntax.h": {
+      "mode": 420,
+      "sha256": "4ddeaceae38e8bc8c10f3bc59562c144d0f3e85e3c5c6687ed1b7651372fec36",
+      "size": 1424
+    },
+    "WQSyntax.m": {
+      "mode": 420,
+      "sha256": "985f4c64f8b1fe9dcf84987c379179a13af6fc103b655a1fb42ef75b18dc4361",
+      "size": 16839
+    },
+    "WQTheme.h": {
+      "mode": 420,
+      "sha256": "ec6353338a6e6cbb05c223b6c60982ec7ad5727d8cfd7c41ebf333f1dff36a26",
+      "size": 4590
+    },
+    "WQTheme.m": {
+      "mode": 420,
+      "sha256": "03db4b12c5cc1b2546a5d27464c05cff370e9f328b5aa5371cf9e92eac9f0f74",
+      "size": 31216
+    },
+    "WQTrash.h": {
+      "mode": 420,
+      "sha256": "3f23b818750482837cf00dbe827b7e647aacd6e45e330a52ffec704ec5fb3e31",
+      "size": 1783
+    },
+    "WQTrash.m": {
+      "mode": 420,
+      "sha256": "8ba68f09e15b2c8224bac02a865a0c925aacdf47009ab81a8d2752f2b4b9a9a7",
+      "size": 8900
+    },
+    "WQUI.h": {
+      "mode": 420,
+      "sha256": "2bdd9ab9a0e09d495c72a502cee520eafc0e6e83d86542fbf648d3868db94838",
+      "size": 4326
+    },
+    "WQUI.m": {
+      "mode": 420,
+      "sha256": "d28dd1fc70eb23f92c7de2c1ab420ff3729b9a1c96bd04fca95e316da1be5d57",
+      "size": 34104
+    },
+    "WQWebServer.h": {
+      "mode": 420,
+      "sha256": "772fd2378ab8eabc2bafa70c2dd4c05562367f18c47c78e540664c4f4ff2dcc4",
+      "size": 3116
+    },
+    "WQWebServer.m": {
+      "mode": 420,
+      "sha256": "6c092d579aa1b69f479fb1919ea1a5251723906e0d24961de02fcc257da7770c",
+      "size": 70163
+    },
+    "ar.lproj/Localizable.strings": {
+      "mode": 420,
+      "sha256": "21345119a22dfffb8a47cc0f0511cbafe9ec13a291b84ff3a538fe9ff657d363",
+      "size": 121785
+    },
+    "build.sh": {
+      "mode": 493,
+      "sha256": "aae30a15d95c83a1aae1d76ffc3780ecb9913dc37e6bf25629e1687000e6b6b4",
+      "size": 8013
+    },
+    "de.lproj/Localizable.strings": {
+      "mode": 420,
+      "sha256": "8a4aa47a7776a27b95d4a206f98723064d845e636ae053cf99da5a805fbdbf28",
+      "size": 104317
+    },
+    "en.lproj/Localizable.strings": {
+      "mode": 420,
+      "sha256": "fcdc1381dcb799e9e07bb7aea8951ebf7c05a2ebfcdeb8f1e1c25bbe177efad7",
+      "size": 93450
+    },
+    "entitlements.plist": {
+      "mode": 420,
+      "sha256": "b9eb5dd7dde2d87cc1397bd418646d46aa976f7fd3aa1c315b0dcb035bf9cf7e",
+      "size": 294
+    },
+    "es.lproj/Localizable.strings": {
+      "mode": 420,
+      "sha256": "3b0be55297a10fa62dfbee978f442a11742b957ee25222a8467a9633b5712b0a",
+      "size": 104726
+    },
+    "examples/inspectors/JSON Summary/inspect.js": {
+      "mode": 420,
+      "sha256": "1727203c136d2d71425f2c6bb609346cd88fe001d8f807fe8bafc01ad0624571",
+      "size": 745
+    },
+    "examples/inspectors/JSON Summary/manifest.json": {
+      "mode": 420,
+      "sha256": "096a0981a4000ffd205d60a073a950aa999cee280edc2b0cf375dcdd398e0eb9",
+      "size": 139
+    },
+    "examples/inspectors/Plist Keys/data.json": {
+      "mode": 420,
+      "sha256": "df10d60373e6a6ec1e99e2f348d006b510f45957d17519fae1bd56ef48d99766",
+      "size": 175
+    },
+    "examples/inspectors/Plist Keys/inspect.js": {
+      "mode": 420,
+      "sha256": "5436069fde83424005e5011a654eddc89d22ae0ea0dab44de6a8cd925e973264",
+      "size": 959
+    },
+    "examples/inspectors/Plist Keys/manifest.json": {
+      "mode": 420,
+      "sha256": "95b835e08c71212789f2575d8b56d299c119c5ba079841f0a0a836d0879cec31",
+      "size": 173
+    },
+    "icons/AppIcon1024-dark.png": {
+      "mode": 420,
+      "sha256": "5db35426a9f9fa3b1eb5160fa7170214fcb5d12b385f07867112079ce089f3d6",
+      "size": 47831
+    },
+    "icons/AppIcon1024-tinted.png": {
+      "mode": 420,
+      "sha256": "5de253f47fbc4ceed25105e6d9134a9d59ef44383ea0eacdd281359ff89b44b8",
+      "size": 11234
+    },
+    "icons/AppIcon1024.png": {
+      "mode": 420,
+      "sha256": "0a81f77562c47489b11cf68a296888b3563022f1cd63dd89b128371212dde19f",
+      "size": 757845
+    },
+    "icons/src/make_appearance_icons.py": {
+      "mode": 420,
+      "sha256": "3d6855037107b36550837f8f0f73b81fb9b7ffb25f5c4889b886fb5814bf7262",
+      "size": 1724
+    },
+    "it.lproj/Localizable.strings": {
+      "mode": 420,
+      "sha256": "c61afa0857c3b5c62491a346616d615cd84d41c3a3733df0d634c6acf39f2600",
+      "size": 102049
+    },
+    "ja.lproj/Localizable.strings": {
+      "mode": 420,
+      "sha256": "b3c8f1547d25cc275ccb656de311e206478e2bc2bcc95205700eb7a8b19225b6",
+      "size": 118588
+    },
+    "ko.lproj/Localizable.strings": {
+      "mode": 420,
+      "sha256": "1cbd7d9e46f209b57195dfda1d95909242830221c6afa2a47bf5b6f195346e9b",
+      "size": 108148
+    },
+    "main.m": {
+      "mode": 420,
+      "sha256": "3713df74101b3495dd9f2eec4e708abd6532cba3daa4bcbc91b1e923556cca26",
+      "size": 374848
+    },
+    "pl.lproj/Localizable.strings": {
+      "mode": 420,
+      "sha256": "57a67f77fa0598e2f3880085a26e4456fc73cc61403caf1bd8724b36925d2f88",
+      "size": 104108
+    },
+    "pt-BR.lproj/Localizable.strings": {
+      "mode": 420,
+      "sha256": "09c7905bf7f2a115d5d948c46e165a177c35d35a3671ac3681816d5814a9a2d9",
+      "size": 101248
+    },
+    "ru.lproj/Localizable.strings": {
+      "mode": 420,
+      "sha256": "09e3bd6eb72dbb9c00c02bd9a08e86dc9710222188b11f3eb49b0e04c0d07100",
+      "size": 139074
+    },
+    "screenshots/ipad-home.webp": {
+      "mode": 420,
+      "sha256": "0ec1f96fc26b11f717d905b0b9919306b248b56aa9c7665d92c1450d3b66d452",
+      "size": 70336
+    },
+    "scripts/update_source.py": {
+      "mode": 493,
+      "sha256": "923b5f1f2c7204fb9dfff0960e8e5e488bcc99c0fd7c08016c556a2c3df3696b",
+      "size": 8991
+    },
+    "source.json": {
+      "mode": 420,
+      "sha256": "3d1cbe6a914a8accec5c572ad5a67f99b8fb3f09ed5926ad9244cd0acb5305f6",
+      "size": 14627
+    },
+    "tests/WQAccessCopyTests.m": {
+      "mode": 420,
+      "sha256": "ac2a58abd77b047827e9bb2ea3c4cf4029eaf18a915e6153ac38322862be829a",
+      "size": 10933
+    },
+    "tests/WQAccessMeasureTests.m": {
+      "mode": 420,
+      "sha256": "078d3b7b3531de0f715eb51fc3b8de9ea482fe2fce9fe8d6f2a64ddbe54bffd7",
+      "size": 3506
+    },
+    "tests/WQAccessMutationTests.m": {
+      "mode": 420,
+      "sha256": "75be25b63adb0b7e0e5635e9c773be8e9cc4b5870efd285479de5673aa721592",
+      "size": 25850
+    },
+    "tests/WQAccessSafetyTests.m": {
+      "mode": 420,
+      "sha256": "f3ad29f088c876b76af1c64aa015ef2d3276106e8fcd71e4ca8c706c454dc0f6",
+      "size": 18006
+    },
+    "tests/WQAccessScanTests.m": {
+      "mode": 420,
+      "sha256": "528fd2abab174db47d207668df95ff97d1eb199fdeacd9dc19c06eaeb3da03b0",
+      "size": 11212
+    },
+    "tests/WQAccessTreeTests.m": {
+      "mode": 420,
+      "sha256": "e16fb905ed0eedbd9fcd05529b263cf5dca40d16f09789850180bc31cbf8b39f",
+      "size": 22144
+    },
+    "tests/WQAppsCopyTests.m": {
+      "mode": 420,
+      "sha256": "982c911524970dd3fba1a3c0c5aa35bb9dc69a7583205bbe7f0d18686d3332c6",
+      "size": 6612
+    },
+    "tests/WQAppsSupportTests.m": {
+      "mode": 420,
+      "sha256": "2296d52bc1bbf3f19df5bf6850ef835c48fd27d60bdce128d3beedbc3dd3edf6",
+      "size": 14872
+    },
+    "tests/WQArchiveTests.m": {
+      "mode": 420,
+      "sha256": "ef3c212b90c8b4f0147a449b94bcc0b9a3d03319c976fc8555a216806764225c",
+      "size": 25531
+    },
+    "tests/WQCacheSafetyTests.m": {
+      "mode": 420,
+      "sha256": "ccd22bd41ca8d6f5f3ca1cc418653c53d5802f8a58677f9e164ea0784953d769",
+      "size": 5671
+    },
+    "tests/WQCoreTests.m": {
+      "mode": 420,
+      "sha256": "641cbfdf4889018d326a5eb46d9873de3a5068bbbdc5e4f5d65be9a09315c9b2",
+      "size": 5813
+    },
+    "tests/WQHexViewerHelpersTests.m": {
+      "mode": 420,
+      "sha256": "8426c9f0f642790a9467a7c0b383f3c83df9ab550a4af91c205f4e332a2d520e",
+      "size": 1801
+    },
+    "tests/WQInspectorTests.m": {
+      "mode": 420,
+      "sha256": "b572a516094ea112d4eab2835c1e95ad0fe80f5ec419f7d5de7779cdcc79d7aa",
+      "size": 11313
+    },
+    "tests/WQLaunchServicesTests.m": {
+      "mode": 420,
+      "sha256": "f33462e517e44b7fb584de910334bcc86ba281322264623b3f088767e1beaa5e",
+      "size": 22502
+    },
+    "tests/WQLocalizationTests.m": {
+      "mode": 420,
+      "sha256": "0dab8d5eb3efe7ba7ad542dc7e67787aa30024540a19b24d809a00c4c9d92f32",
+      "size": 3343
+    },
+    "tests/WQMediaStreamTests.m": {
+      "mode": 420,
+      "sha256": "82a1412b9e9d9ccd8602710d12360fba82155287a27f553e21552dd57d327f5f",
+      "size": 17319
+    },
+    "tests/WQPlistEditorSupportTests.m": {
+      "mode": 420,
+      "sha256": "8fdd22df8727e098178321f00865e974234476b924d433523a4e16259f43055f",
+      "size": 9714
+    },
+    "tests/WQSQLiteSaveTests.m": {
+      "mode": 420,
+      "sha256": "ac517aa2ae7229fe7f59b1f6cd95c8cc4f41e31d72974fd2af42677c27284f04",
+      "size": 13635
+    },
+    "tests/WQSQLiteSupportTests.m": {
+      "mode": 420,
+      "sha256": "98fbb1e72c3fe48cd69efccd3c9d752977144df3a545132ddd526fc2b0386e80",
+      "size": 7916
+    },
+    "tests/WQScanInodeCheckpointTests.m": {
+      "mode": 420,
+      "sha256": "c0494d902d1ead9dfbbbe45226ab29bdb733d721ee9a575f4dbb6290188e348a",
+      "size": 3538
+    },
+    "tests/WQScanRecoveryTests.m": {
+      "mode": 420,
+      "sha256": "099cc667c0a6b64fbcd0e757db2fa2d4543dc753cb67c15f090ee4f0acc02dd2",
+      "size": 8270
+    },
+    "tests/WQScanUITests.m": {
+      "mode": 420,
+      "sha256": "fb04d7fedf8df5bafbc5e4bf2766241c17911fdee8f9d4e0bff553fc174abb32",
+      "size": 9847
+    },
+    "tests/WQSyntaxTests.m": {
+      "mode": 420,
+      "sha256": "aa3e7aae813be4ab66e9c049d53f1b2f47b9287e646a8f3bcef691675a336d6f",
+      "size": 5863
+    },
+    "tests/WQTrashTests.m": {
+      "mode": 420,
+      "sha256": "698f937a5d42172efbee72fb695e822505f73ea2d7edcc7c1538d004f91cc0ae",
+      "size": 14539
+    },
+    "tests/browser_ui_regressions.py": {
+      "mode": 420,
+      "sha256": "59ccd3ca5d3533a2403f45cb35d964310a556f8196e3a44a0a9d205682e5872b",
+      "size": 6546
+    },
+    "tests/run_access_safety_tests.sh": {
+      "mode": 420,
+      "sha256": "5ea15be3b4d174058a3baff0705a30a4a64858c528548e2e0c816cf50797eb5d",
+      "size": 1328
+    },
+    "tests/run_all_tests.sh": {
+      "mode": 493,
+      "sha256": "672c96a06cd51ab304ec42c56b420e44f117af277b7735a6cec268df3c62e4f8",
+      "size": 6657
+    },
+    "tests/run_apps_tests.sh": {
+      "mode": 493,
+      "sha256": "52c8c56b0d361f098b49005a9e27d8d7fe6e78f500f7f8e6f34b01d42cf68eda",
+      "size": 472
+    },
+    "tests/run_hex_helpers_tests.sh": {
+      "mode": 493,
+      "sha256": "5f8eed2bca83b8dff5124f501100eda6114ea4c56cc687c2528c9f0bdf7e1b69",
+      "size": 431
+    },
+    "tests/run_launchservices_tests.sh": {
+      "mode": 493,
+      "sha256": "7300ab3dbc297b4dceccd584ed7752c2449ea4270af84c6a105f6c5e161a5943",
+      "size": 925
+    },
+    "tests/run_localization_tests.sh": {
+      "mode": 493,
+      "sha256": "fa3a989ea96250a64a49d7dd5e701b0d68545e70e6993e2c62ed6b30827a5b05",
+      "size": 848
+    },
+    "tests/run_plist_tests.sh": {
+      "mode": 493,
+      "sha256": "48a2239c84945ef2c1308a2d5a05b922e9f2a0afad3474da80a8bf11b96d10f4",
+      "size": 550
+    },
+    "tests/run_scan_ui_tests.sh": {
+      "mode": 493,
+      "sha256": "a30e133a88f10b913617c7f287dce0dcda7481294e3fd125041fec0e979e1f6e",
+      "size": 3276
+    },
+    "tests/run_tests.sh": {
+      "mode": 493,
+      "sha256": "8ac0f3ed5b9b139d80a8fda54a42a85254faf39b03747ab2560eec27a84d563f",
+      "size": 521
+    },
+    "tests/test_build.py": {
+      "mode": 420,
+      "sha256": "1a8c4424abf09369d419985e2be64f40698d059446ee2b2716ae535d93969fd6",
+      "size": 12445
+    },
+    "tests/test_localization.py": {
+      "mode": 420,
+      "sha256": "6af21b5694f4b570a3db88c02dacb1d0dd9e40ee53ca316ce3f30161d44003bc",
+      "size": 6257
+    },
+    "tests/test_release_policy.py": {
+      "mode": 420,
+      "sha256": "d1f1d7f1450ec0b8b599632e1328042a1820a5b1eaf2b39f965f61d8bbbeb4e3",
+      "size": 1958
+    },
+    "tests/test_scan_lifecycle.py": {
+      "mode": 420,
+      "sha256": "6650f0642fe3bf66fbf35faa2fae243226b00a380a41fa3ee33a0f44387270d5",
+      "size": 5215
+    },
+    "tests/test_update_source.py": {
+      "mode": 420,
+      "sha256": "ba58832fb6ed010026fc175ead305fa08a9d65497bec6742c0e675dc8bd5c721",
+      "size": 7837
+    },
+    "th.lproj/Localizable.strings": {
+      "mode": 420,
+      "sha256": "e2a026d6fd5b144197db6665cdebe45a325c7f9c751b9699867838ccad297717",
+      "size": 157098
+    },
+    "themes/midnight.wqtheme": {
+      "mode": 420,
+      "sha256": "9395e4b39a6c5adf66a8cb901238dd0d7076c41799e0beb82f1390fa440b5d6d",
+      "size": 950
+    },
+    "themes/sunset.wqtheme": {
+      "mode": 420,
+      "sha256": "ee715ab668be6d1f2c1168fd3d21beb8ed4a4de96d423a7bb5c8eadedd7b1c3a",
+      "size": 812
+    },
+    "tr.lproj/Localizable.strings": {
+      "mode": 420,
+      "sha256": "3b61ba1e5210c115d24e54b0c8d7dd0b4ab4a0fba0bc64c3147c7b5b50c07bb5",
+      "size": 101592
+    },
+    "vi.lproj/Localizable.strings": {
+      "mode": 420,
+      "sha256": "d8155ef87f2b8cf3b611d8eedca97247ddc3f4e4e0781565ecc4870d00da392a",
+      "size": 113863
+    },
+    "zh-Hans.lproj/Localizable.strings": {
+      "mode": 420,
+      "sha256": "1488a0adca15d6bdbd0e278f40f4a32bbfc6fb67294ad709ac8ad36e2c8098cb",
+      "size": 93625
+    }
+  },
+  "repository": "https://github.com/kolbicz/WQFiles",
+  "safety_fixture_sha256": "ee50bfcb0aeb82b8de4e93e3fcd27bedac74076057701a7e8406d1ad64b3282b",
+  "tree": "972390a87378d99ce2e56097ff30871cf94a8e1f"
+}
