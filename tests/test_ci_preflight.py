@@ -1,8 +1,12 @@
 """Fail-closed CI toolchain selection using explicit command-response fixtures."""
 import importlib.util
+import contextlib
+import io
 import json
 from pathlib import Path
+import subprocess
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location('ci_preflight', ROOT / 'scripts/ci_preflight.py')
@@ -90,6 +94,41 @@ class CIPreflightTests(unittest.TestCase):
         self.responses[('sysctl', '-n', 'hw.activecpu')] = '1'
         with self.assertRaises(ValueError):
             CI.inspect_toolchain(self.run_command, '26.0', simulator=True)
+
+    def test_inventory_timeout_retries_once_then_validates_response(self):
+        command = ['xcrun', 'simctl', 'list', 'runtimes', '--json']
+        response = subprocess.CompletedProcess(command, 0, '{"runtimes": []}\n')
+        with mock.patch.object(CI.subprocess, 'run', side_effect=[subprocess.TimeoutExpired(command, 60), response]) as run:
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(CI.command(command), '{"runtimes": []}')
+            self.assertEqual(run.call_count, 2)
+            self.assertTrue(all(call.kwargs['timeout'] == 60 for call in run.call_args_list))
+        # Retrying the query must not turn an empty inventory into success.
+        self.runtimes = []
+        with self.assertRaises(ValueError):
+            CI.inspect_toolchain(self.run_command, '26.0', simulator=True)
+
+    def test_repeated_inventory_timeout_fails_closed(self):
+        command = ['xcrun', 'simctl', 'list', 'devicetypes', '--json']
+        with mock.patch.object(CI.subprocess, 'run', side_effect=subprocess.TimeoutExpired(command, 60)) as run:
+            with contextlib.redirect_stdout(io.StringIO()), self.assertRaises(subprocess.TimeoutExpired):
+                CI.command(command)
+            self.assertEqual(run.call_count, 2)
+
+    def test_other_timeouts_are_not_retried(self):
+        for command in [['xcodebuild', '-version'], ['xcrun', 'simctl', 'boot', 'fixture']]:
+            with self.subTest(command=command):
+                with mock.patch.object(CI.subprocess, 'run', side_effect=subprocess.TimeoutExpired(command, 60)) as run:
+                    with contextlib.redirect_stdout(io.StringIO()), self.assertRaises(subprocess.TimeoutExpired):
+                        CI.command(command)
+                    self.assertEqual(run.call_count, 1)
+
+    def test_inventory_command_error_is_not_retried(self):
+        command = ['xcrun', 'simctl', 'list', 'runtimes', '--json']
+        with mock.patch.object(CI.subprocess, 'run', return_value=subprocess.CompletedProcess(command, 1, 'failed')) as run:
+            with contextlib.redirect_stdout(io.StringIO()), self.assertRaises(subprocess.CalledProcessError):
+                CI.command(command)
+            self.assertEqual(run.call_count, 1)
 
 
 if __name__ == '__main__':

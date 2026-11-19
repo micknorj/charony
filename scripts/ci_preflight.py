@@ -67,12 +67,23 @@ def inspect_toolchain(run, minimum_os, simulator=False):
 
 
 def command(arguments):
-    print('$ ' + ' '.join(arguments), flush=True)
-    result = subprocess.run(arguments, text=True, stdout=subprocess.PIPE,
-                            stderr=subprocess.STDOUT, timeout=60, check=False)
-    print(result.stdout, end='' if result.stdout.endswith('\n') else '\n', flush=True)
-    result.check_returncode()
-    return result.stdout.strip()
+    # CoreSimulator's first inventory query can spend its timeout starting the
+    # hosted service. Retry only this read-only setup query, once. A second
+    # timeout, command error or invalid inventory remains a hard failure.
+    attempts = 2 if arguments[:3] == ['xcrun', 'simctl', 'list'] else 1
+    for attempt in range(attempts):
+        print('$ ' + ' '.join(arguments), flush=True)
+        try:
+            result = subprocess.run(arguments, text=True, stdout=subprocess.PIPE,
+                                    stderr=subprocess.STDOUT, timeout=60, check=False)
+        except subprocess.TimeoutExpired:
+            if attempt + 1 == attempts:
+                raise
+            print('CoreSimulator inventory timed out; retrying once without skipping validation.', flush=True)
+            continue
+        print(result.stdout, end='' if result.stdout.endswith('\n') else '\n', flush=True)
+        result.check_returncode()
+        return result.stdout.strip()
 
 
 def main():

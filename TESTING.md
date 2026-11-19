@@ -8,7 +8,7 @@ The reviewed main revision `286782c0e35747f3676de1af23e4b1addabd7944` passed [Gi
 | --- | --- | --- |
 | Unchanged WQ Files v0.9.18 runner | Passed, including 32 Python tests and native suites | Four-CPU Intel macOS, Xcode 26.2; `upstream-baseline` job |
 | Optional upstream ffmpeg-video subcase | Skipped: ffmpeg unavailable | Removed Charony functionality; not device evidence |
-| Current portable suite | 42 tests passed | macOS; `tests/test_*.py` |
+| Reviewed main portable suite | 42 tests passed | macOS; `tests/test_*.py` |
 | Current native safety fixtures | All 10 executables passed | Arm64 macOS; `tests/run_all_tests.sh` |
 | Strict iOS syntax, compilation and linking | Passed with `-Wall -Wextra -Werror` | Arm64, Xcode / iOS SDK 26.2, deployment target 26.0 |
 | Source and compiled-binary privacy audits | Passed | Real built executable; `scripts/privacy_audit.py` |
@@ -33,7 +33,7 @@ python3 scripts/privacy_audit.py
 bash -n build.sh scripts/sources.sh tests/run_all_tests.sh tests/run_scan_ui_tests.sh
 ```
 
-The 42-test suite includes 19 source/package checks, seven POSIX build-pipeline methods, seven verified-baseline extraction methods and nine toolchain-preflight methods. Pipeline tests use command doubles for Apple tools; they do not replace native validation. Windows can run the source/package subset with `python -m unittest discover -s tests -p test_charony.py`; run POSIX fixtures in Cloud or macOS.
+The current 46-test suite includes 19 source/package checks, seven POSIX build-pipeline methods, seven verified-baseline extraction methods and 13 toolchain-preflight methods. The reviewed main run above predates the four inventory-timeout regressions and executed 42 tests. Pipeline tests use command doubles for Apple tools; they do not replace native validation. Windows can run the source/package subset with `python -m unittest discover -s tests -p test_charony.py`; run POSIX fixtures in Cloud or macOS.
 
 On macOS with Xcode 26.2 selected:
 
@@ -56,7 +56,7 @@ To run host/syntax checks separately, use `bash tests/run_all_tests.sh`. To rech
 | `upstream-baseline` | `macos-26-intel`, at least four active CPUs | Verify Xcode/SDKs, verify pinned stable source, run unchanged upstream tests |
 | `charony` | Arm64 `macos-26`, at least two active CPUs | Native/portable tests, strict iOS build, privacy, assets, signature/entitlements, IPA, disposable simulator |
 
-Both jobs require `/Applications/Xcode_26.2.app/Contents/Developer` and iOS 26.2 SDKs. Simulator preflight requires an available iPhone 17 / iOS 26.2 runtime. It records `toolchain.json` and fails on missing or mismatched tooling. The unchanged upstream interruption fixture needs two workers from half the active CPUs; Charony's corresponding fixture selects existing parallel mode without changing its recovery assertions.
+Both jobs require `/Applications/Xcode_26.2.app/Contents/Developer` and iOS 26.2 SDKs. Simulator preflight requires an available iPhone 17 / iOS 26.2 runtime. It records `toolchain.json` and fails on missing or mismatched tooling. A timed-out read-only CoreSimulator inventory query is retried once with the same 60-second bound. A second timeout, nonzero command result or invalid inventory still fails; tests and mutation commands are not retried by this setup helper. The unchanged upstream interruption fixture needs two workers from half the active CPUs; Charony's corresponding fixture selects existing parallel mode without changing its recovery assertions.
 
 The stable archive and all files are verified against the pinned manifest before extraction. Safety-helper comparisons do not depend on inherited Git objects. See [source provenance](ARCHITECTURE.md#source-provenance).
 
