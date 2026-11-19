@@ -1,57 +1,120 @@
-Validation recorded on November 19, 2026 in Codex Cloud Linux with Python 3.12.14. Native execution is unavailable locally on Linux. Subsequent real macOS Actions results are recorded below. Physical-device execution remains unverified and release gates remain open.
+# Testing and verification
 
-| Check | Command or evidence | Actual outcome | Platform |
-| --- | --- | --- | --- |
-| Starting fork | git rev-parse HEAD | 985cf765cdf3bd4cb88da15de3f7d928664efae6 | Linux |
-| Stable baseline | git cat-file and stable-tree comparison | e44cd0ef226305bc265c8d7a15607ec49ceb4368 available and restored before reduction | Linux |
-| Baseline portable subset | Original localization, release-policy and catalog-update Python suites | 21 tests passed before reduction | Linux |
-| Baseline Python discovery | Original 32-test discovery | Reported 7 failures including subtests and 1 error involving missing plutil/xcrun | Linux |
-| Baseline static browser checks | Original browser_ui_regressions.py | Passed before reduction | Linux |
-| Baseline full regression runner | Unchanged stable tests/run_all_tests.sh | Blocked at missing xcrun, exit 127 | Linux |
-| First macOS baseline attempt | Actions run 44562028598 on three-CPU Arm64 macos-26 | Failed at the unchanged WQScanInodeCheckpointTests 900-second timeout. Its two-worker interruption fixture received one scanner worker | macOS |
-| Unchanged native baseline on compatible host | Actions run 44564175947 on four-CPU macos-26-intel, Xcode 26.2 | Passed the full runner, 32 Python tests and strict iOS checks. The original optional ffmpeg-video path reported a skip because ffmpeg was absent | macOS |
-| Initial Charony portable gates | PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -p 'test_*.py' -v | 16 tests passed before focused review | Linux |
-| Prior Python host suite after CI preparation | PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -p 'test_*.py' -v | 33 tests passed, including seven POSIX build-pipeline tests and seven fail-closed CI toolchain tests with explicit command responses | Linux |
-| Independent-history Python suite | PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -p 'test_*.py' -v | 40 tests passed, including seven verified baseline extraction tests. Same nine upstream safety helpers remain compared | Linux |
-| Current macOS Python suite | Actions run 44569366001, python3 -m unittest discover -s tests -p test_*.py -v | 41 tests passed, including deployment/architecture/missing-asset refusal under Bash 3.2 | macOS |
-| Runner CPU preflight | python3 -m unittest discover -s tests -p test_ci_preflight.py -v | Eight tests passed after adding refusal of fewer than four active CPUs. No native test was disabled | Linux |
-| Original build-fixture diagnosis | python3 tests/baseline_build_probe.py | 10 passed with explicit plist-tool adapters and upstream command doubles. Native operations unverified | Linux |
-| Privacy source audit | python3 scripts/privacy_audit.py | Passed | Linux |
-| Shell parsing | bash -n build.sh scripts/sources.sh tests/run_all_tests.sh tests/run_scan_ui_tests.sh | Passed | Linux |
-| Workflow configuration | YAML parsing, embedded Bash parsing and gate/permission/artifact inspection | Passed locally. GitHub execution remains unrun | Linux |
-| Credential material review | Indexed filename/private-key/token-pattern scan and workflow inspection | Passed for the prepared source tree. No signing material, secret references or credential import/publishing steps found | Linux |
-| Hosted toolchain inventory | Official actions/runner-images macOS 26 inventory, retrieved November 19, 2026 | Lists Xcode 26.2 build 17C52, iOS 26.2 SDK and iOS 26.2 simulator. CI verifies the actual host before native checks | Cloud/GitHub |
-| Local CI toolchain preflight | DEVELOPER_DIR=/Applications/Xcode_26.0.app/Contents/Developer python3 scripts/ci_preflight.py --simulator | Refused unavailable Xcode on Linux as expected. Hosted availability remains unverified | Linux |
-| Diff whitespace | git diff --check | Passed | Linux |
-| Charony full regression runner | bash tests/run_all_tests.sh | Blocked at missing xcrun, exit 127 | Linux |
-| Objective-C safety fixtures | Actions run 44567526989, tests/run_all_tests.sh | All ten native suites passed after correcting stale diagnostic/type references and canonical fixture paths | macOS |
-| Strict iOS arm64 syntax/linking | Actions run 44569366001, tests/run_all_tests.sh | Passed with Xcode 26.2 and -Wall -Wextra -Werror | macOS |
-| UIKit controller fixtures | Actions run 44571948811, WQ_SIMULATOR_UDID=… bash tests/run_scan_ui_tests.sh | Passed on disposable iPhone 17/iOS 26.2 Arm64 simulator, including real background/foreground delivery and cold relaunch | iOS Simulator |
-| Development IPA entry point | bash build.sh | Attempted in Linux, blocked at native preflight with missing xcrun. No IPA produced | Linux |
-| Built-binary privacy audit | Actions run 44569366001, scripts/privacy_audit.py --binary … | Passed on the real arm64 executable, alongside source auditing | macOS |
-| Ad-hoc signature, App Group, metadata, archive and actool validation | Actions run 44569366001, build.sh and scripts/verify_ipa.py | Passed on the real development IPA. Extracted signature, exact App Group, metadata and compiled flat icon verified | macOS |
-| Layered Icon Composer appearances | Mac authoring plus build/device inspection | Incomplete. Only a flat development PNG is provided | macOS/device |
-| GitHub Actions | .github/workflows/validate.yml | Running on a parentless preparation branch. Actions run 44571948811 passed both jobs, all ten Charony native suites, all 42 Python tests, strict iOS checks, privacy, real IPA validation and simulator fixtures. Earlier Intel run 44569366001 also completed successfully; no run was cancelled | GitHub macOS |
-| Authorized GitHub permission/read checks | gh api user, repository metadata and git ls-remote origin | Passed. Authenticated owner is micknorj, repository ID 1463379238, push/admin true, fork=false, parent/source absent. Initial remote main is 985cf765cdf3bd4cb88da15de3f7d928664efae6 | Cloud/GitHub |
-| Baseline source preservation | Trusted Git-tree comparison plus scripts/baseline_source.py | Downloaded archive matches all 147 stable files and executable modes. Archive and per-file hashes pinned. Original probe still passes all 10 tests | Linux |
-| Re-signed App Group, sandbox access, actual deletion | Maintainer-controlled supported iPhone | Unverified | Physical iOS |
+## Verified baseline
 
-The source/package tests and POSIX pipeline fixtures check source privacy and audit detection, physical feature removal, import/compile inventory, metadata and entitlements, empty initial cache selection, confirmation wiring, scoped mutation validation, completed-result persistence removal, native search wiring, staged build gates and positive/negative IPA metadata fixtures. They also compare retained access-cache safety primitives with the stable Git object. Pipeline fixtures exercise preflight, compilation argument construction, assets, source/binary audit invocation, signing/entitlement refusal, ZIP failures, package verification and exact final replacement. Entitlement checks remain active under Python optimization. They provide static and orchestration/packaging evidence. They do not execute Objective-C deletion or UIKit behavior.
+The initial native validation passed on independent root `0e8a450f3b1abeee0ea00101cc5adbf36a6bfdff` in [GitHub Actions run 44574969914](https://github.com/micknorj/charony/actions/runs/44574969914). Both `upstream-baseline` and `charony` succeeded. This is build, fixture and simulator evidence; physical-device behavior remains unverified.
 
-The macOS runner retains upstream access-cache swap/recovery, symlink/path safety, measurement, shared scan cancellation/invalidation, inode-frontier checkpoint and process-interruption recovery fixtures. Backup/editor-only fixtures were removed with those APIs. The original purge cases remain in WQPurgeTests.m, with added late-leaf replacement, cancellation, refusal and repeat cases. WQEnglishPresentationTests retains relevant runtime formatting coverage, and CHAppDataTests retains the original bundle-ID grammar cases. CHAppDataTests.m adds disposable selected-container scope, unrelated-file preservation, missing access, bundle/inode changes, traversal, symlink preflight, repeated clears, identity changes during clearing and absent backup artifacts. WQScanRecoveryTests now requires completed results to disappear across processes while unfinished task identity and pause state survive.
+| Check | Result | Platform / evidence |
+| --- | --- | --- |
+| Unchanged WQ Files v0.9.18 runner | Passed, including 32 Python tests and native suites | Four-CPU Intel macOS, Xcode 26.2; `upstream-baseline` job |
+| Optional upstream ffmpeg-video subcase | Skipped: ffmpeg unavailable | Removed Charony functionality; not device evidence |
+| Current portable suite | 42 tests passed | macOS; `tests/test_*.py` |
+| Current native safety fixtures | All 10 executables passed | Arm64 macOS; `tests/run_all_tests.sh` |
+| Strict iOS syntax, compilation and linking | Passed with `-Wall -Wextra -Werror` | Arm64, Xcode / iOS SDK 26.2, deployment target 26.0 |
+| Source and compiled-binary privacy audits | Passed | Real built executable; `scripts/privacy_audit.py` |
+| Flat development icon / asset compilation | Passed | `actool`, compiled `Assets.car` |
+| Development IPA, metadata, exact App Group entitlement and ad-hoc signature | Passed | Real IPA; build verification and extracted signature check |
+| UIKit, lifecycle and cold-relaunch fixtures | Passed | Disposable iPhone 17 / iOS 26.2 simulator |
+| Downloaded final IPA structural/metadata recheck | Passed | Linux; `scripts/verify_ipa.py` |
+| Layered Icon Composer appearances | Incomplete | Flat icon only |
+| Final sideloaded signature, physical App Group/access and actual deletion | Unverified | No physical device tested |
 
-The UIKit harness includes crash-directory allowlist, malformed record, symlink ancestry, replacement, cancellation and repeat fixtures. The UIKit harness uses the production tab controller, Apps controller, cache validation and cleaning implementation with disposable files. It covers contextual search/controller restoration, independent query context, manual cache selection, one batch confirmation, cancellation by dismissing the dialog, two selected cache/tmp targets, an unselected app sentinel, changed-target batch refusal, scan state and appearance. It supplies scan results through fixtures and overrides discovery rescans during batch tests. It does not issue real sandbox tokens. The shell harness now drives actual background/foreground delivery and cold relaunch through simctl, checking missing completed rows and retained interrupted-task identity. These lifecycle and relaunch checks passed in run 44571948811. Confirmation button touch delivery, VoiceOver, Dynamic Type, conditional recovery presentation and iOS 27 UI behavior still need expanded simulator/device verification.
+No required check failed in that run. Historical Linux baseline failures were missing-tool limitations, not established application defects. Native CI subsequently passed the unchanged baseline. See [safety coverage](docs/SAFETY.md#baseline-failures) for the classification.
 
-A passed source audit cannot establish the final binary's behavior. The build's Mach-O import/string audit and code-signature checks must run against the actual artifact. Native tests can still expose compiler errors or behavioral defects. The pinned GitHub runner/Xcode path and simulator runtime require confirmation in CI. Preflight now checks actual Xcode/SDK versions and available simulator inventory, records toolchain.json and refuses substitution or skipping. Seven command-response tests cover matching tooling and refusal of wrong Xcode/SDK/deployment target, unavailable runtime/device and empty SDK paths. Both jobs retain diagnostic logs on failure. No physical iPhone, final sideloaded signature, Safari data or Messages data was exercised. The complete automated workflow passed on the parentless preparation branch before the one-time main replacement.
+## Local checks
 
-Critical deletion, privacy, recovery and packaging failures block a release. All unrun checks above remain open. Obtain independent review of destructive code before primary-phone use, complete the layered icon work and begin physical checks read-only. Destructive validation belongs to an expendable application with disposable data. A CI pass alone cannot establish safety for destructive use on a primary iPhone.
+Run from the repository root. Python uses only the standard library.
 
-The focused findings, complete original-21-to-current coverage mapping, checkpoint symlink/legacy migration fixtures, baseline failure classification and CI readiness assessment are in IMPLEMENTATION_REVIEW.md. The original full discovery was reproduced with the same seven missing-plutil assertion failures and one missing-xcrun error. No baseline application defect was established by these observations.
+On Linux or macOS, with Python 3, Git, Bash, zip and unzip:
 
-CI_VALIDATION.md records the authorized development-branch/PR/Actions process, read-only workflow permissions, credential policy, exact artifact names and evidence required for planning review. AGENTS.md and the specification preserve shared engineering principles and scope GitHub write authorization to this repository. GitHub identity, fork detachment and owner permissions are now verified. The one-time independent-history migration uses the requested repository-local noreply identity and a recoverable external bundle. CI baseline source and helper fixtures no longer depend on inherited Git objects. Native host tests, real IPA checks and simulator fixtures passed in run 44571948811. Physical-device behavior remains unverified. Final root validation is recorded in the task report.
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -p 'test_*.py' -v
+python3 scripts/privacy_audit.py
+bash -n build.sh scripts/sources.sh tests/run_all_tests.sh tests/run_scan_ui_tests.sh
+```
 
-The independent-history source exporter checks the pinned archive, full file inventory, hashes, sizes and executable bits before writing. Seven regression cases cover valid extraction, archive tampering, missing/extra/changed files, duplicate entries, traversal/links, pre-existing destinations and mode/size changes. The fixture comparison retains the same nine exact helper bodies. The full upstream test source is downloaded only for development validation and is not included in the app or in Charony Git ancestry.
+The 42-test suite includes 19 source/package checks, seven POSIX build-pipeline methods, seven verified-baseline extraction methods and nine toolchain-preflight methods. Pipeline tests use command doubles for Apple tools; they do not replace native validation. Windows can run the source/package subset with `python -m unittest discover -s tests -p test_charony.py`; run POSIX fixtures in Cloud or macOS.
 
-Real macOS validation found two compile defects from cleanup (a stale diagnostic-counter reference and untyped in-memory location hint), both corrected. The app-clear fixture now canonicalizes its disposable root and checks path/identity preconditions before refusal tests. The fixture then passed, including deletion scope, unrelated-data preservation, repeat/identity-change behavior and absence of backups. Bash 3.2 packaging checks now use explicit failure exits for output-parent, deployment-target, architecture and asset-catalog validation. Existing fault tests caught the architecture and deployment failures; a missing-catalog refusal case was added. Pinned fixture files retain LF bytes under Windows checkout conversion.
+On macOS with Xcode 26.2 selected:
 
-The current portable suite contains 42 tests. The unchanged baseline runs on four-CPU Intel. Charony native tests and simulator fixtures run on Arm64, with the checkpoint fixture explicitly requesting two-worker parallel mode. Both retain their original crash/frontier/recovery assertions. Full successful evidence is https://github.com/micknorj/charony/actions/runs/44571948811, at source commit d6935501b274f50a89c6b1052b8a52d7c861dc44. Its real IPA was downloaded and independently passed scripts/verify_ipa.py on Linux. Final root code matches that validated preparation tree; documentation records the migration results.
+```sh
+export DEVELOPER_DIR=/Applications/Xcode_26.2.app/Contents/Developer
+python3 scripts/ci_preflight.py --simulator
+bash build.sh
+```
+
+`build.sh` runs the native and portable suites, strict iOS checks, source/binary audits, asset compilation, ad-hoc signing and package verification. It writes `charony.ipa` only after the build gates pass. `CHARONY_FINAL_IPA` may select an output path whose parent already exists. Failure preserves an existing final artifact.
+
+To run host/syntax checks separately, use `bash tests/run_all_tests.sh`. To recheck an IPA's structure and metadata, use `python3 scripts/verify_ipa.py path/to/charony.ipa`. This Python check alone does not verify an Apple signature.
+
+## GitHub Actions
+
+[`.github/workflows/validate.yml`](.github/workflows/validate.yml) runs on branch pushes, pull requests and manual dispatch. It does not merge, release or deploy.
+
+| Job | Environment | Required work |
+| --- | --- | --- |
+| `upstream-baseline` | `macos-26-intel`, at least four active CPUs | Verify Xcode/SDKs, verify pinned stable source, run unchanged upstream tests |
+| `charony` | Arm64 `macos-26`, at least two active CPUs | Native/portable tests, strict iOS build, privacy, assets, signature/entitlements, IPA, disposable simulator |
+
+Both jobs require `/Applications/Xcode_26.2.app/Contents/Developer` and iOS 26.2 SDKs. Simulator preflight requires an available iPhone 17 / iOS 26.2 runtime. It records `toolchain.json` and fails on missing or mismatched tooling. The unchanged upstream interruption fixture needs two workers from half the active CPUs; Charony's corresponding fixture selects existing parallel mode without changing its recovery assertions.
+
+The stable archive and all files are verified against the pinned manifest before extraction. Safety-helper comparisons do not depend on inherited Git objects. See [source provenance](ARCHITECTURE.md#source-provenance).
+
+The Charony job requires baseline success. There are no allowed-failure steps. Checkout/upload actions are pinned, permissions are `contents: read`, and checkout credentials are not persisted. No Apple credentials, provisioning profiles or signing secrets are required.
+
+### Submitting changes
+
+1. Check repository identity, write permissions, local commit identity and existing remote work as required by [AGENTS.md](AGENTS.md).
+2. Push a development branch and open a pull request targeting `main`.
+3. Find the submitted commit's runs and inspect both job conclusions:
+
+   ```sh
+   gh run list --repo micknorj/charony
+   gh run view RUN_ID --repo micknorj/charony
+   gh run watch RUN_ID --repo micknorj/charony --exit-status
+   ```
+
+4. Fix failures without disabling checks. A skipped dependent job is unverified. Keep the first failing stage and its full log.
+
+### Artifacts
+
+- `upstream-baseline-diagnostics`: selected baseline/preflight logs
+- `charony-validation-diagnostics`: build, native, Python and simulator evidence
+- `charony-development-unverified-on-device`: development IPA, uploaded only after validation succeeds
+
+Artifacts are retained for 14 days. Selected diagnostics are uploaded even on failure; hidden result/log paths are included. Download needed evidence before expiry. Preserve the run URL, tested SHA, toolchain record, conclusions and remaining gaps when reporting results.
+
+## Safety coverage
+
+Native fixtures cover access-cache recovery, no-follow path checks, purge boundaries, selected-app scope, identity changes, symlinks, traversal, unrelated-file preservation, cancellation, repeated operations, missing access, scan interruption and checkpoint recovery. Clearing and cleaning must create no backup artifacts.
+
+The simulator uses production controllers with disposable fixture roots. It covers fixed crash/cache boundaries, changed-target batch refusal, manual selection, one confirmation, cancellation, unselected sentinels, contextual search/controller restoration, background/foreground handling and cold relaunch. Test-only root overrides are excluded from the production build. These fixtures do not issue real sandbox tokens.
+
+[docs/SAFETY.md](docs/SAFETY.md) records the destructive-operation model, review fixes and all 21 original portable-test dispositions. Counts alone do not establish equivalent coverage.
+
+## Device verification
+
+Physical verification is maintainer-controlled. The intended target is an iPhone 11 Pro on iOS 27.2.1; it has not been tested with Charony.
+
+1. Review the final re-signed bundle ID, App Group entitlement and signature. The development values are `io.github.micknorj.charony` and `group.io.github.micknorj.charony`; the signer may assign a different group. Runtime must select the signer's actual usable group.
+2. Begin read-only: launch, verify group/access setup, accessible-app listing, inaccessible-app hiding, icons and size measurement. Check current permission failures and conditional Reset Access Cache.
+3. Verify refresh, pause/resume, background/foreground, interrupted scans, restart recovery and absence of completed-result caching.
+4. Check tab/search placement, keyboard/touch interaction, Light/Dark appearance, filters, confirmation/cancel, VoiceOver, Dynamic Type and supported iOS/iPad layouts. Programmatic simulator success is not complete interaction coverage.
+5. Test deletion only on an expendable app with disposable data, preferably on a spare supported device. Check exact scope, preserved roots/unrelated files, no backups, cancellation where supported, changed identity, failure reporting and repeat behavior. Never test by deleting live Safari or Messages data.
+6. Verify real asset appearances after layered Icon Composer work is complete. Do not infer Light/Dark/Clear/Tinted icon support from flat PNG compilation.
+
+The intended Windows signing route is AltStore Classic with a free Apple account. Provisioning, refresh and service limits are controlled by Apple and the signer. Installation and App Group preservation remain unverified. If disposable-device testing is unavailable, keep destructive-device behavior marked unverified.
+
+## Release checklist
+
+Releases require explicit maintainer approval and manual publication.
+
+- Obtain independent destructive-code review and pass all current baseline, safety, privacy, scan, UI and packaging gates
+- Complete layered icon work and record actual device/signing evidence and supported builds
+- Keep unsupported patched iOS versions and partial-deletion limits visible
+- Select and verify the version/build metadata; build from the reviewed source revision
+- Review the final re-signed signature, App Group entitlement, metadata and package contents
+- Include GPL licensing, notices, corresponding source and build scripts for the exact binary
+- Record the tested commit, run URL, device/build, results and any unresolved checks before approving publication
+
+Critical deletion, privacy, recovery or packaging failures block an IPA release. A CI pass alone does not establish safety for destructive use on a primary iPhone.
