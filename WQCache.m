@@ -921,9 +921,14 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
             ?: [[WQSummaryCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:@"summary"];
         unsigned long long total = 0, selected = 0;
         NSUInteger n = 0;
-        for (WQCacheItem *it in _items) { total += it.bytes; if (it.selected) { selected += it.bytes; n++; } }
+        BOOL complete = YES;
+        for (WQCacheItem *it in _items) {
+            total += it.bytes;
+            if (!it.cacheKnown || (!it.crashLogs && !it.tempKnown)) complete = NO;
+            if (it.selected) { selected += it.bytes; n++; }
+        }
         BOOL busy = _scanning || _cleaning;
-        cell.captionLabel.text = busy ? (_cleaning ? WQLocalized(@"Cleaning") : WQLocalized(@"Scanning")) : WQLocalized(@"Reclaimable");
+        cell.captionLabel.text = busy ? (_cleaning ? WQLocalized(@"Cleaning") : WQLocalized(@"Scanning")) : WQLocalized(complete ? @"Reclaimable" : @"Reclaimable (incomplete)");
         if (busy) [cell.spinner startAnimating]; else [cell.spinner stopAnimating];
         // While the first scan runs, the total found so far counts up.
         cell.totalLabel.text = wq_size_text((_scanning && !_items.count) ? _scanBytes : total);

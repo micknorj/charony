@@ -47,6 +47,11 @@ static void runAppListStateFixtures(void)
     check([controller tableView:controller.tableView numberOfRowsInSection:0] == 1, @"completed-app-model-is-visible");
     check([[controller tableView:controller.tableView titleForHeaderInSection:0] containsString:@"1 app ·"], @"single-app-summary-uses-singular");
     generation = [task beginFresh:YES cancel:^{}];
+    NSMutableDictionary *partial = [row mutableCopy];
+    partial[@"sizeKnown"] = @NO;
+    [task finish:@{@"rows": @[partial], @"note": @"", @"complete": @YES} generation:generation];
+    check([[controller tableView:controller.tableView titleForHeaderInSection:0] containsString:@"size incomplete"], @"partial-app-total-does-not-claim-an-exact-size");
+    generation = [task beginFresh:YES cancel:^{}];
     check([controller tableView:controller.tableView numberOfRowsInSection:0] == 1, @"refresh-keeps-real-app-row");
     UITableViewCell *cell = [controller tableView:controller.tableView cellForRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]];
     UIListContentConfiguration *content = (UIListContentConfiguration *)cell.contentConfiguration;
@@ -289,6 +294,11 @@ static void runCacheBatchFixtures(UIWindow *window, dispatch_block_t next)
         check([summary.statusLabel.text isEqualToString:@"Freed fixture data."], @"empty-completed-cache-note-keeps-clean-result-visible");
         [caches setValue:nil forKey:@"result"];
         id item = items.firstObject;
+        NSNumber *cacheKnown = [item valueForKey:@"cacheKnown"];
+        [item setValue:@NO forKey:@"cacheKnown"];
+        summary = (WQSummaryCell *)[caches tableView:caches.tableView cellForRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]];
+        check([summary.captionLabel.text containsString:@"incomplete"], @"partial-cache-total-is-labelled-incomplete");
+        [item setValue:cacheKnown forKey:@"cacheKnown"];
         [item setValue:@NO forKey:@"limited"];
         NSIndexPath *cacheRow = [NSIndexPath indexPathForRow:0 inSection:1];
         WQCleanerCell *cacheCell = (WQCleanerCell *)[caches tableView:caches.tableView cellForRowAtIndexPath:cacheRow];
