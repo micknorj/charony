@@ -60,7 +60,7 @@ Both jobs require `/Applications/Xcode_26.2.app/Contents/Developer` and iOS 26.2
 
 The stable archive and all files are verified against the pinned manifest before extraction. Safety-helper comparisons do not depend on inherited Git objects. See [source provenance](ARCHITECTURE.md#source-provenance).
 
-The Charony job requires baseline success. There are no allowed-failure steps. Checkout/upload actions are pinned, permissions are `contents: read`, and checkout credentials are not persisted. No Apple credentials, provisioning profiles or signing secrets are required.
+The Charony job requires baseline success. There are no allowed-failure steps. Checkout v7.0.1 and upload-artifact v7.0.2 are pinned to full commit SHAs and use Node 24; permissions are `contents: read`, and checkout credentials are not persisted. No Apple credentials, provisioning profiles or signing secrets are required.
 
 ### Submitting changes
 
@@ -92,7 +92,7 @@ The required UIKit harness exercises production controllers, confirmation handle
 WQ_SIMULATOR_UDID=YOUR_DISPOSABLE_BOOTED_SIMULATOR bash tests/run_scan_ui_tests.sh
 ```
 
-Fixture roots and failure-injection hooks are compiled only into the test host. They do not establish real protected-app access or final device signing. Simulator failures retain bounded transition diagnostics rather than substituting outcomes.
+Fixture roots and failure-injection hooks are compiled only into the test host. They do not establish real protected-app access or final device signing. Simulator failures retain bounded transition diagnostics rather than substituting outcomes. Marker timeouts retain the last fixture phase, native process stdout/stderr and a best-effort host stack sample; the required marker still fails the job. These diagnostics belong only to the test host.
 
 ## Safety coverage
 

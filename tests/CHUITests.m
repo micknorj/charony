@@ -24,6 +24,12 @@ static void marker(NSString *name)
     [NSFileManager.defaultManager createDirectoryAtPath:documents withIntermediateDirectories:YES attributes:nil error:nil];
     [@"ok" writeToFile:[documents stringByAppendingPathComponent:name] atomically:YES encoding:NSUTF8StringEncoding error:nil];
 }
+static void phase(NSString *name)
+{
+    NSString *documents = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
+    [NSFileManager.defaultManager createDirectoryAtPath:documents withIntermediateDirectories:YES attributes:nil error:nil];
+    [name writeToFile:[documents stringByAppendingPathComponent:@"ui-phase.log"] atomically:YES encoding:NSUTF8StringEncoding error:nil];
+}
 static void check(BOOL condition, NSString *name)
 {
     if (!condition) { marker([@"FAIL-" stringByAppendingString:name]); abort(); }
@@ -74,6 +80,7 @@ static void checkRowLayout(UITableView *table, NSIndexPath *index)
 }
 static void runTypographyFixtures(UIWindow *window, UITableViewController *controller)
 {
+    phase(@"runTypographyFixtures");
     // Emulate both system extremes. The workflow also sets the real simulator
     // preference before launch. These are assertions, not image captures.
     window.traitOverrides.preferredContentSizeCategory = UIContentSizeCategoryAccessibilityExtraExtraExtraLarge;
@@ -104,14 +111,16 @@ static void runTypographyFixtures(UIWindow *window, UITableViewController *contr
 
 // Rescanning is supplied by fixtures. The real batch mutation implementation runs.
 @interface CHFixtureCaches : WQCacheCleanerViewController
+@property (nonatomic) NSUInteger scanRequests;
 @end
 @implementation CHFixtureCaches
-- (void)scan {}
+- (void)scan { self.scanRequests++; }
 @end
 @interface CHFixtureApps : WQAppsViewController
+@property (nonatomic) NSUInteger scanRequests;
 @end
 @implementation CHFixtureApps
-- (void)scan {}
+- (void)scan { self.scanRequests++; }
 @end
 @interface WQAppsViewController (CHPresentationFixtures)
 - (void)presentPendingClearResult;
@@ -143,6 +152,7 @@ static void awaitUIKitState(BOOL (^ready)(void), NSUInteger remaining, NSString 
 }
 static void runDeferredClearResultFixture(UIWindow *window, dispatch_block_t next)
 {
+    phase(@"runDeferredClearResultFixture");
     CHFixtureApps *controller = [CHFixtureApps new];
     window.rootViewController = [[UINavigationController alloc] initWithRootViewController:controller];
     [window layoutIfNeeded];
@@ -179,6 +189,7 @@ static void runDeferredClearResultFixture(UIWindow *window, dispatch_block_t nex
 static void runActiveSearchNavigationFixtures(UITabBarController *tabs, WQAppsViewController *apps,
                                                UINavigationController *appsNav, dispatch_block_t next)
 {
+    phase(@"runActiveSearchNavigationFixtures");
     UITab *search = tabs.tabs[2], *appsTab = tabs.tabs[0], *cachesTab = tabs.tabs[1];
     UISearchController *controller = apps.contextSearchController;
     NSDictionary *(^diagnostics)(void) = ^NSDictionary *{
@@ -231,6 +242,7 @@ static void runActiveSearchNavigationFixtures(UITabBarController *tabs, WQAppsVi
 }
 static void runCacheSearchConfirmationFixture(UITabBarController *tabs, WQCacheCleanerViewController *caches, dispatch_block_t next)
 {
+    phase(@"runCacheSearchConfirmationFixture");
     NSArray *items = [caches valueForKey:@"items"];
     id item = items.firstObject;
     [item setValue:@NO forKey:@"limited"];
@@ -262,14 +274,28 @@ static void runCacheSearchConfirmationFixture(UITabBarController *tabs, WQCacheC
 
 // Drive real scan notifications without container access. The original
 // harness seeded a completed result before showing Apps, missing first scans.
+static void checkRefreshControls(UITableViewController *controller)
+{
+    UIBarButtonItem *refresh = nil, *filters = nil;
+    for (UIBarButtonItem *button in controller.navigationItem.rightBarButtonItems) {
+        if ([button.accessibilityIdentifier isEqualToString:@"refresh"]) refresh = button;
+        if ([button.accessibilityIdentifier isEqualToString:@"filters"]) filters = button;
+    }
+    check(refresh && filters && refresh != filters && filters.menu != nil, @"refresh-and-ellipsis-menu-are-separate-native-controls");
+    check([[controller valueForKey:@"scanRequests"] unsignedIntegerValue] == 0, @"opening-a-tab-does-not-request-scanning");
+    check([UIApplication.sharedApplication sendAction:refresh.action to:refresh.target from:refresh forEvent:nil], @"native-refresh-control-invokes-its-real-action");
+    check([[controller valueForKey:@"scanRequests"] unsignedIntegerValue] == 1, @"refresh-action-reaches-the-scan-entry-point");
+}
 static void runAppListStateFixtures(UIWindow *window)
 {
+    phase(@"runAppListStateFixtures");
     CHFixtureApps *controller = [CHFixtureApps new];
     window.rootViewController = [[UINavigationController alloc] initWithRootViewController:controller];
     [window makeKeyAndVisible];
     [controller loadViewIfNeeded];
     check([[visibleLabelText(controller.tableView.backgroundView) stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet] isEqualToString:@"Refresh to update"], @"initial-apps-explicit-refresh-message");
     check(![WQScanTask taskNamed:@"apps"].running, @"opening-apps-does-not-start-a-scan");
+    checkRefreshControls(controller);
     WQScanTask *task = [WQScanTask taskNamed:@"apps"];
     NSUInteger generation = [task beginFresh:YES cancel:^{}];
     [task progress:@"Finding apps…" fraction:0.25 generation:generation];
@@ -307,11 +333,13 @@ static void runAppListStateFixtures(UIWindow *window)
 
 static void runCacheListStateFixtures(UIWindow *window)
 {
+    phase(@"runCacheListStateFixtures");
     CHFixtureCaches *controller = [CHFixtureCaches new];
     window.rootViewController = [[UINavigationController alloc] initWithRootViewController:controller];
     [window layoutIfNeeded];
     [controller loadViewIfNeeded];
     check([visibleLabelText(controller.tableView.backgroundView) containsString:@"Refresh to update"] && ![WQScanTask taskNamed:@"clean"].running, @"initial-caches-waits-for-explicit-refresh");
+    checkRefreshControls(controller);
     WQScanTask *task = [WQScanTask taskNamed:@"clean"];
     NSUInteger generation = [task beginFresh:YES cancel:^{}];
     [controller setStatus:@"Finding apps…" progress:0.3];
@@ -415,6 +443,7 @@ static void runCrashFixtures(NSString *root)
 static void invokeAlertAction(UIAlertController *alert, UIAlertActionStyle style);
 static void runCacheBatchFixtures(UIWindow *window, dispatch_block_t next)
 {
+    phase(@"runCacheBatchFixtures");
     NSString *root = [WQCacheSafetyCanonicalPath(NSTemporaryDirectory()) stringByAppendingPathComponent:NSUUID.UUID.UUIDString];
     WQCacheFixtureRoot = root;
     WQCacheItem *first = cacheFixture(root), *second = cacheFixture(root), *unselected = cacheFixture(root);
@@ -522,8 +551,56 @@ static void releaseFixturePurge(void)
 {
     dispatch_semaphore_signal(CHOperationRelease);
 }
+static void runCrashConfirmationFixtures(UIWindow *window, dispatch_block_t next)
+{
+    phase(@"runCrashConfirmationFixtures");
+    NSFileManager *files = NSFileManager.defaultManager;
+    NSString *root = [WQCacheSafetyCanonicalPath(NSTemporaryDirectory()) stringByAppendingPathComponent:NSUUID.UUID.UUIDString];
+    WQCacheFixtureRoot = root;
+    WQCacheItem *app = cacheFixture(root);
+    NSString *reportRoot = [root stringByAppendingPathComponent:@"CrashReporter"];
+    [files createDirectoryAtPath:reportRoot withIntermediateDirectories:YES attributes:nil error:nil];
+    NSString *sentinel = [reportRoot stringByAppendingPathComponent:@"disposable.ips"];
+    [@"keep" writeToFile:sentinel atomically:YES encoding:NSUTF8StringEncoding error:nil];
+    WQCacheFixtureCrashRoots = @[reportRoot];
+    WQCacheItem *reports = crashFixture(reportRoot); reports.selected = YES;
+    CHFixtureCaches *controller = [CHFixtureCaches new];
+    window.rootViewController = [[UINavigationController alloc] initWithRootViewController:controller];
+    [controller loadViewIfNeeded];
+    [controller setValue:@[app, reports] forKey:@"items"];
+    NSDictionary *(^diagnostics)(void) = ^NSDictionary *{ return @{@"alert":controller.presentedViewController.title ?: @"nil"}; };
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [controller confirmClean];
+        awaitUIKitState(^BOOL { return [controller.presentedViewController isKindOfClass:UIAlertController.class] && !controller.presentedViewController.isBeingPresented; },
+            150, @"mixed-crash-confirmation-is-presented", diagnostics, ^{
+            UIAlertController *alert = (UIAlertController *)controller.presentedViewController;
+            check([alert.message containsString:@"Library/Caches and tmp"] && [alert.message containsString:@"plus Crash Logs"] &&
+                  [alert.message containsString:@"Offline downloads"] && [alert.message containsString:@"No backup"], @"mixed-confirmation-keeps-both-scopes-and-content-loss-warning");
+            invokeAlertAction(alert, UIAlertActionStyleCancel);
+            awaitUIKitState(^BOOL { return !controller.presentedViewController; }, 150, @"mixed-crash-cancel-is-dismissed", diagnostics, ^{
+                app.selected = NO;
+                [controller confirmClean];
+                awaitUIKitState(^BOOL { return [controller.presentedViewController isKindOfClass:UIAlertController.class] && !controller.presentedViewController.isBeingPresented; },
+                    150, @"crash-only-confirmation-is-presented", diagnostics, ^{
+                    UIAlertController *only = (UIAlertController *)controller.presentedViewController;
+                    check([only.message containsString:@"Delete Crash Logs"] && [only.message containsString:@"cannot be undone"] && [only.message containsString:@"No backup"] &&
+                          ![only.message containsString:@"Library/Caches"] && ![only.message containsString:@"Offline downloads"], @"crash-only-warning-does-not-claim-app-data-deletion");
+                    invokeAlertAction(only, UIAlertActionStyleCancel);
+                    awaitUIKitState(^BOOL { return !controller.presentedViewController; }, 150, @"crash-only-cancel-is-dismissed", diagnostics, ^{
+                        check([files fileExistsAtPath:sentinel] && [files fileExistsAtPath:[app.targets[0] stringByAppendingPathComponent:@"sentinel"]], @"crash-confirmation-cancellation-preserves-all-fixture-data");
+                        [files removeItemAtPath:root error:nil];
+                        WQCacheFixtureRoot = nil; WQCacheFixtureCrashRoots = nil;
+                        next();
+                    });
+                });
+            });
+        });
+    });
+}
+
 static void runRealAppClearFixtures(UIWindow *window, dispatch_block_t next)
 {
+    phase(@"runRealAppClearFixtures");
     NSFileManager *files = NSFileManager.defaultManager;
     CHFixtureContainers = [WQCacheSafetyCanonicalPath(NSTemporaryDirectory()) stringByAppendingPathComponent:NSUUID.UUID.UUIDString];
     CHTestApplicationRoot = CHFixtureContainers;
@@ -614,6 +691,7 @@ static void runRealAppClearFixtures(UIWindow *window, dispatch_block_t next)
 }
 static void runCacheStopFixture(UIWindow *window, dispatch_block_t next)
 {
+    phase(@"runCacheStopFixture");
     NSString *root = [WQCacheSafetyCanonicalPath(NSTemporaryDirectory()) stringByAppendingPathComponent:NSUUID.UUID.UUIDString];
     WQCacheFixtureRoot = root;
     WQCacheItem *first = cacheFixture(root), *second = cacheFixture(root);
@@ -641,6 +719,7 @@ static void runCacheStopFixture(UIWindow *window, dispatch_block_t next)
 
 static void runRecoveryConsentFixtures(UIWindow *window, dispatch_block_t next)
 {
+    phase(@"runRecoveryConsentFixtures");
     CHFixtureApps *apps = [CHFixtureApps new];
     window.rootViewController = [[UINavigationController alloc] initWithRootViewController:apps];
     [window layoutIfNeeded];
@@ -699,6 +778,7 @@ static void runRecoveryConsentFixtures(UIWindow *window, dispatch_block_t next)
 - (void)scene:(UIScene *)scene willConnectToSession:(UISceneSession *)session options:(UISceneConnectionOptions *)options
 {
     (void)session; (void)options;
+    phase(@"scene-connect");
     if ([NSProcessInfo.processInfo.arguments containsObject:@"recover"]) {
         WQScanTask *apps = [WQScanTask taskNamed:@"apps"];
         WQScanTask *clean = [WQScanTask taskNamed:@"clean"];
@@ -830,7 +910,7 @@ static void runRecoveryConsentFixtures(UIWindow *window, dispatch_block_t next)
         [apps dismissViewControllerAnimated:NO completion:^{
             runCacheBatchFixtures(self.window, ^{
                 runRealAppClearFixtures(self.window, ^{ runCacheStopFixture(self.window, ^{
-                    runDeferredClearResultFixture(self.window, ^{ runRecoveryConsentFixtures(self.window, ^{ [self beginLifecycleValidation]; }); });
+                    runCrashConfirmationFixtures(self.window, ^{ runDeferredClearResultFixture(self.window, ^{ runRecoveryConsentFixtures(self.window, ^{ [self beginLifecycleValidation]; }); }); });
                 }); });
             });
         }];
@@ -840,6 +920,7 @@ static void runRecoveryConsentFixtures(UIWindow *window, dispatch_block_t next)
 }
 - (void)beginLifecycleValidation
 {
+    phase(@"background-and-cold-relaunch");
     self.lifecycleTask = [WQScanTask taskNamed:@"clean"];
     [self.lifecycleTask beginFresh:YES cancel:^{}];
     self.waitingForForeground = YES;

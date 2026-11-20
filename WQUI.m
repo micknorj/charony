@@ -21,8 +21,6 @@ void wq_prepare_list(UITableViewController *host, NSString *title)
 {
     host.title = title;
     host.view.maximumContentSizeCategory = UIContentSizeCategoryLarge;
-    host.navigationController.view.maximumContentSizeCategory = UIContentSizeCategoryLarge;
-    host.navigationController.navigationBar.maximumContentSizeCategory = UIContentSizeCategoryLarge;
     host.navigationItem.largeTitleDisplayMode = UINavigationItemLargeTitleDisplayModeNever;
     host.navigationItem.title = @"";
     UILabel *label = [UILabel new];

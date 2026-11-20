@@ -24,7 +24,7 @@ xcrun simctl install "$WQ_SIMULATOR_UDID" "$APP"
 DATA=$(xcrun simctl get_app_container "$WQ_SIMULATOR_UDID" "$BUNDLE" data)
 retain_diagnostics() {
     local diagnostic
-    for diagnostic in search-navigation ui-layout; do
+    for diagnostic in search-navigation ui-layout ui-phase; do
         if [[ -f "$DATA/Documents/$diagnostic.log" ]]; then
             cp "$DATA/Documents/$diagnostic.log" "$OUT/$diagnostic.log"
             cat "$OUT/$diagnostic.log"
@@ -43,6 +43,11 @@ wait_marker() {
         sleep 1
     done
     printf 'UIKit fixture harness timed out waiting for %s\n' "$marker" >&2
+    retain_diagnostics
+    # Diagnostic sampling never turns a missing required marker into success.
+    if [[ "${UI_PID:-}" =~ ^[0-9]+$ ]]; then
+        sample "$UI_PID" 1 -file "$OUT/ui-hang.log" || true
+    fi
     return 1
 }
 for APPEARANCE in light dark; do
@@ -52,15 +57,21 @@ for APPEARANCE in light dark; do
     # Markers and diagnostics must belong to this run, not the previous profile.
     rm -f -- "$DATA/Documents/ready-for-background" "$DATA/Documents/background-paused" \
         "$DATA/Documents/ready-to-terminate" "$DATA/Documents/recovery-passed" \
-        "$DATA/Documents/search-navigation.log" "$DATA/Documents/ui-layout.log" "$DATA/Documents/FAIL-"*
-    SIMCTL_CHILD_CH_EXPECTED_APPEARANCE="$APPEARANCE" xcrun simctl launch "$WQ_SIMULATOR_UDID" "$BUNDLE"
+        "$DATA/Documents/search-navigation.log" "$DATA/Documents/ui-layout.log" "$DATA/Documents/ui-phase.log" "$DATA/Documents/FAIL-"*
+    LAUNCH=$(SIMCTL_CHILD_CH_EXPECTED_APPEARANCE="$APPEARANCE" xcrun simctl launch \
+        --stdout="$OUT/$APPEARANCE-stdout.log" --stderr="$OUT/$APPEARANCE-stderr.log" "$WQ_SIMULATOR_UDID" "$BUNDLE")
+    printf '%s\n' "$LAUNCH"
+    UI_PID=${LAUNCH##*: }
     wait_marker ready-for-background
     xcrun simctl launch "$WQ_SIMULATOR_UDID" com.apple.Preferences
     wait_marker background-paused
     xcrun simctl launch "$WQ_SIMULATOR_UDID" "$BUNDLE"
     wait_marker ready-to-terminate
     xcrun simctl terminate "$WQ_SIMULATOR_UDID" "$BUNDLE"
-    SIMCTL_CHILD_CH_EXPECTED_APPEARANCE="$APPEARANCE" xcrun simctl launch "$WQ_SIMULATOR_UDID" "$BUNDLE" recover
+    LAUNCH=$(SIMCTL_CHILD_CH_EXPECTED_APPEARANCE="$APPEARANCE" xcrun simctl launch \
+        --stdout="$OUT/$APPEARANCE-recover-stdout.log" --stderr="$OUT/$APPEARANCE-recover-stderr.log" "$WQ_SIMULATOR_UDID" "$BUNDLE" recover)
+    printf '%s\n' "$LAUNCH"
+    UI_PID=${LAUNCH##*: }
     wait_marker recovery-passed
     retain_diagnostics
     xcrun simctl terminate "$WQ_SIMULATOR_UDID" "$BUNDLE"

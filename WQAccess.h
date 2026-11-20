@@ -38,7 +38,7 @@ NSString *_Nullable wq_permission_hint(NSString *path, BOOL forWriting);
 
 // Whether the owner, group and mode of `st` let this app (uid, gid and its
 // supplementary groups) read the item; for folders, read and search. The
-// folder lists use it to dim what can't be opened (issue #57).
+// Apps discovery uses it to exclude unreadable containers.
 BOOL wq_stat_readable(const struct stat *st);
 
 // lstat with access retry. Returns NO if the item does not exist.
@@ -82,11 +82,6 @@ WQMeasureResult wq_measure_tree(NSString *dir, WQScanCancellation *_Nullable can
 
 // MCM container identifier (bundle or group id) of a container folder.
 NSString *_Nullable wq_container_label(NSString *dir);
-// Extra source for wq_container_label, tried after the identifier attribute and
-// the container-manager table: path (/private/var/...) -> identifier or nil.
-// iOS 26: where a full scan takes far too long, the App Data and Extensions
-// lists come from this provider (the LaunchServices database). storeHint is a
-// database path the scan found, or nil for the remembered one.
 // Full scans (every file id; minutes on a well-used device) only start after
 // `confirm` returns YES; it's called on a background thread with what is being
 // listed, the number of ids and a rough duration. `progress` reports a running
@@ -95,7 +90,10 @@ void wq_set_full_scan_ui(BOOL (*_Nullable confirm)(NSString *what, int64_t ids, 
                          void (*_Nullable progress)(int64_t done, int64_t total, BOOL finished));
 // Cancels the owned full scan; retained for native cancellation regression tests.
 void wq_full_scan_stop(void);
+// iOS 26 container-list fallback from the LaunchServices database. storeHint
+// is a newly discovered database path or nil for the remembered location.
 void wq_set_container_list_provider(NSArray<NSString *> *_Nullable (*_Nullable provider)(NSString *_Nullable storeHint));
+// Extra path-to-identifier source after attributes and container-manager hints.
 void wq_set_container_label_resolver(NSString *_Nullable (*_Nullable resolver)(NSString *path));
 // App Group folder -> group id, consulted after the metadata plist.
 void wq_set_group_label_resolver(NSString *_Nullable (*_Nullable resolver)(NSString *path));
@@ -113,6 +111,10 @@ void wq_scan_set_paused(BOOL paused);
 BOOL wq_scan_wait(WQScanCancellation *_Nullable cancellation);
 
 BOOL wq_access_cache_needs_recovery(void);
+// Deletes contents while retaining dir. No backup or rollback. Revalidates
+// scope, ancestry, cancellation and leaf identity before mutation and retries;
+// child links are never followed. A missing dir is done; refusal/change/first
+// failure stops the walk. Adds logical removed-file bytes to *freed.
 BOOL wq_purge_contents_validated(NSString *dir, unsigned long long *freed, WQScanCancellation *_Nullable cancellation, BOOL (^_Nullable validate)(void));
 
 NSString *_Nullable wq_access_capability_failure(void);
