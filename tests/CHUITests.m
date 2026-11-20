@@ -23,6 +23,28 @@ static NSString *visibleLabelText(UIView *view)
     for (UIView *child in view.subviews) [parts addObject:visibleLabelText(child)];
     return [parts componentsJoinedByString:@" "];
 }
+static NSString *renderedFooterText(UITableView *table, NSInteger section)
+{
+    [table layoutIfNeeded];
+    UITableViewHeaderFooterView *footer = [table footerViewForSection:section];
+    BOOL attachedBefore = footer.window != nil;
+    // At accessibility sizes the summary and row can fill the viewport.
+    // UIKit only creates a section footer when it enters that viewport.
+    if (!attachedBefore)
+        [table scrollRectToVisible:[table rectForFooterInSection:section] animated:NO];
+    [table layoutIfNeeded];
+    footer = [table footerViewForSection:section];
+    NSString *path = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject stringByAppendingPathComponent:@"cache-footer-layout.log"];
+    NSDictionary *geometry = @{@"attachedBefore":@(attachedBefore), @"attachedAfter":@(footer.window != nil),
+        @"category":table.traitCollection.preferredContentSizeCategory,
+        @"footer":NSStringFromCGRect([table rectForFooterInSection:section]),
+        @"viewport":NSStringFromCGRect(table.bounds)};
+    NSString *line = [[NSString alloc] initWithData:[NSJSONSerialization dataWithJSONObject:geometry options:0 error:nil] encoding:NSUTF8StringEncoding];
+    NSString *previous = [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:nil] ?: @"";
+    [[previous stringByAppendingFormat:@"%@\n", line] writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:nil];
+    check(footer.window != nil, @"cache-footer-is-rendered-in-the-actual-viewport");
+    return visibleLabelText(footer);
+}
 static void runAccessibleCacheLayoutFixture(void)
 {
     WQCleanerCell *cell = [[WQCleanerCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:nil];
@@ -468,13 +490,13 @@ static void runCacheBatchFixtures(UIWindow *window, dispatch_block_t next)
         [caches tableView:caches.tableView didSelectRowAtIndexPath:cacheRow];
         check([[item valueForKey:@"selected"] boolValue], @"manual-cache-selection");
         [caches.tableView layoutIfNeeded];
-        check([visibleLabelText([caches.tableView footerViewForSection:1]) containsString:@"Clears each selected app"], @"rendered-cache-footer-updates-after-selection");
+        check([renderedFooterText(caches.tableView, 1) containsString:@"Clears each selected app"], @"rendered-cache-footer-updates-after-selection");
         cacheCell = (WQCleanerCell *)[caches tableView:caches.tableView cellForRowAtIndexPath:cacheRow];
         check([cacheCell.accessibilityValue isEqualToString:@"Selected"] && (cacheCell.accessibilityTraits & UIAccessibilityTraitSelected), @"cache-row-exposes-selected-state");
         [caches tableView:caches.tableView didSelectRowAtIndexPath:cacheRow];
         check(![[item valueForKey:@"selected"] boolValue], @"manual-cache-deselection");
         [caches.tableView layoutIfNeeded];
-        check([visibleLabelText([caches.tableView footerViewForSection:1]) containsString:@"Select app caches"], @"rendered-cache-footer-updates-after-deselection");
+        check([renderedFooterText(caches.tableView, 1) containsString:@"Select app caches"], @"rendered-cache-footer-updates-after-deselection");
         runAccessibleCacheLayoutFixture();
         cacheCell = (WQCleanerCell *)[caches tableView:caches.tableView cellForRowAtIndexPath:cacheRow];
         check([cacheCell.accessibilityValue isEqualToString:@"Not selected"] && !(cacheCell.accessibilityTraits & UIAccessibilityTraitSelected), @"cache-row-clears-selected-accessibility-state");

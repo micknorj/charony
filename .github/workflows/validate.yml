@@ -124,6 +124,7 @@ jobs:
           path: |
             .work/ui-gallery/
             .work/charony-ui-gallery.zip
+            .work/tests/ui.*/*.log
             .ci-results/
           if-no-files-found: error
           retention-days: 14

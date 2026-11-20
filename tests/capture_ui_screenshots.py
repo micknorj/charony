@@ -9,6 +9,7 @@ import re
 import shutil
 import struct
 import subprocess
+import sys
 import time
 import zipfile
 
@@ -64,7 +65,15 @@ def capture_states(device, prefix, output, record):
 
 def recovery(device, prefix, output):
     environment = dict(os.environ, WQ_SIMULATOR_UDID=device)
-    text = run(['bash', 'tests/run_scan_ui_tests.sh'], timeout=240, capture=True, env=environment)
+    try:
+        text = run(['bash', 'tests/run_scan_ui_tests.sh'], timeout=240, capture=True, env=environment)
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+        text = error.stdout or ''
+        if isinstance(text, bytes):
+            text = text.decode('utf-8', 'replace')
+        (output / f'{prefix}_recovery-failure.log').write_text(text)
+        print(text, file=sys.stderr, flush=True)
+        raise
     (output / f'{prefix}_recovery-validation.log').write_text(text)
     match = re.search(r'Artifacts in (.+)', text)
     if not match:

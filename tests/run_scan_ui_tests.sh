@@ -26,10 +26,11 @@ DATA=$(xcrun simctl get_app_container "$WQ_SIMULATOR_UDID" "$BUNDLE" data)
 # Markers must belong to this run. The installed fixture bundle is test-only.
 rm -f -- "$DATA/Documents/ready-for-background" "$DATA/Documents/background-paused" \
     "$DATA/Documents/ready-to-terminate" "$DATA/Documents/recovery-passed" \
-    "$DATA/Documents/search-navigation.log" "$DATA/Documents/footer-layout.log" "$DATA/Documents/FAIL-"*
+    "$DATA/Documents/search-navigation.log" "$DATA/Documents/footer-layout.log" \
+    "$DATA/Documents/cache-footer-layout.log" "$DATA/Documents/FAIL-"*
 retain_diagnostics() {
     local diagnostic
-    for diagnostic in search-navigation footer-layout; do
+    for diagnostic in search-navigation footer-layout cache-footer-layout; do
         if [[ -f "$DATA/Documents/$diagnostic.log" ]]; then
             cp "$DATA/Documents/$diagnostic.log" "$OUT/$diagnostic.log"
             cat "$OUT/$diagnostic.log"
