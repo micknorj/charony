@@ -217,6 +217,37 @@ static void runActiveSearchNavigationFixtures(UITabBarController *tabs, WQAppsVi
         });
     });
 }
+static void runCacheSearchConfirmationFixture(UITabBarController *tabs, WQCacheCleanerViewController *caches, dispatch_block_t next)
+{
+    NSArray *items = [caches valueForKey:@"items"];
+    id item = items.firstObject;
+    [item setValue:@NO forKey:@"limited"];
+    [caches tableView:caches.tableView didSelectRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]];
+    selectFixtureTab(tabs, tabs.tabs[2]);
+    UISearchController *search = caches.contextSearchController;
+    NSDictionary *(^diagnostics)(void) = ^NSDictionary *{ return @{@"selected":tabs.selectedTab.identifier ?: @"nil", @"active":@(search.active), @"alert":caches.presentedViewController.title ?: @"nil"}; };
+    awaitUIKitState(^BOOL { return search.active && !search.isBeingPresented && caches.view.window; },
+        150, @"cache-search-is-actually-active", diagnostics, ^{
+        search.searchBar.text = @"no-matching-fixture";
+        [caches updateSearchResultsForSearchController:search];
+        check([caches.tableView numberOfRowsInSection:0] == 0 && [visibleLabelText(caches.tableView.backgroundView) containsString:@"No results"], @"cache-search-no-results-is-distinct");
+        search.searchBar.text = @"fixture";
+        [caches updateSearchResultsForSearchController:search];
+        check([caches.tableView numberOfRowsInSection:0] == 1, @"cache-context-search-finds-fixture");
+        [caches confirmClean];
+        awaitUIKitState(^BOOL { return [caches.presentedViewController.title isEqualToString:@"Clean caches?"] && !caches.presentedViewController.isBeingPresented; },
+            150, @"cache-confirmation-is-reachable-from-active-search", diagnostics, ^{
+            check(tabs.selectedTab == tabs.tabs[1] && [[item valueForKey:@"selected"] boolValue] && [search.searchBar.text isEqualToString:@"fixture"], @"search-confirmation-restores-same-cache-controller-query-and-selection");
+            [caches dismissViewControllerAnimated:NO completion:^{
+                [caches tableView:caches.tableView didSelectRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]];
+                search.searchBar.text = @"";
+                [caches updateSearchResultsForSearchController:search];
+                next();
+            }];
+        });
+    });
+}
+
 // Drive real scan notifications without container access. The original
 // harness seeded a completed result before showing Apps, missing first scans.
 static void runAppListStateFixtures(UIWindow *window)
@@ -258,6 +289,24 @@ static void runAppListStateFixtures(UIWindow *window)
     [NSNotificationCenter.defaultCenter postNotificationName:WQScanTaskChangedNotification object:task];
     check([visibleLabelText(controller.tableView.backgroundView) containsString:@"Could not save"], @"checkpoint-failure-remains-visible-without-a-scan-date-banner");
     [task setValue:@NO forKey:@"persistenceFailed"];
+}
+
+static void runCacheListStateFixtures(UIWindow *window)
+{
+    CHFixtureCaches *controller = [CHFixtureCaches new];
+    window.rootViewController = [[UINavigationController alloc] initWithRootViewController:controller];
+    [window layoutIfNeeded];
+    [controller loadViewIfNeeded];
+    check([visibleLabelText(controller.tableView.backgroundView) containsString:@"Refresh to update"] && ![WQScanTask taskNamed:@"clean"].running, @"initial-caches-waits-for-explicit-refresh");
+    WQScanTask *task = [WQScanTask taskNamed:@"clean"];
+    NSUInteger generation = [task beginFresh:YES cancel:^{}];
+    [task progress:@"Finding apps…" fraction:0.3 generation:generation];
+    check([controller.tableView numberOfRowsInSection:0] == 0 && [visibleLabelText(controller.tableView.backgroundView) containsString:@"Finding apps"], @"cache-loading-is-distinct-from-empty");
+    [task finish:@{@"rows":@[], @"complete":@YES} generation:generation];
+    check([visibleLabelText(controller.tableView.backgroundView) containsString:@"No caches found"], @"completed-empty-caches-is-distinct");
+    generation = [task beginFresh:YES cancel:^{}];
+    [task finish:@{@"rows":@[], @"complete":@NO, @"note":@"Discovery incomplete. Refresh to retry."} generation:generation];
+    check([visibleLabelText(controller.tableView.backgroundView) containsString:@"Discovery incomplete"], @"cache-discovery-error-remains-visible");
 }
 
 static WQCacheItem *cacheFixture(NSString *root)
@@ -347,6 +396,7 @@ static void runCrashFixtures(NSString *root)
     check([WQCacheConfirmationScope(@[regular, regular, reports]) containsString:@"2 apps, plus Crash Logs"], @"batch-scope-counts-apps-and-reports");
     WQCacheFixtureCrashRoots = nil;
 }
+static void invokeAlertAction(UIAlertController *alert, UIAlertActionStyle style);
 static void runCacheBatchFixtures(UIWindow *window, dispatch_block_t next)
 {
     NSString *root = [WQCacheSafetyCanonicalPath(NSTemporaryDirectory()) stringByAppendingPathComponent:NSUUID.UUID.UUIDString];
@@ -358,20 +408,7 @@ static void runCacheBatchFixtures(UIWindow *window, dispatch_block_t next)
     [controller loadViewIfNeeded];
     [controller setValue:@[first, second, unselected] forKey:@"items"];
     check(WQCacheValidateItem(first, NULL), @"cache-fixture-validation");
-    // Cancellation dismisses the confirmation without entering the mutation worker.
-    [controller confirmClean];
-    UIAlertController *confirmation = (UIAlertController *)controller.presentedViewController;
-    check([confirmation isKindOfClass:UIAlertController.class], @"batch-confirmation-presented");
-    NSUInteger destructive = 0, cancel = 0;
-    for (UIAlertAction *action in confirmation.actions) {
-        if (action.style == UIAlertActionStyleDestructive) destructive++;
-        if (action.style == UIAlertActionStyleCancel) cancel++;
-    }
-    check(destructive == 1 && cancel == 1, @"one-batch-confirmation-and-cancel");
-    [controller dismissViewControllerAnimated:NO completion:^{
-        check([NSFileManager.defaultManager fileExistsAtPath:[first.targets[0] stringByAppendingPathComponent:@"sentinel"]], @"cancel-preserves-cache-data");
-        unselected.selected = YES; // Selection changes after the displayed confirmation.
-        [controller cleanItems:@[first, second] generation:[[controller valueForKey:@"scanGeneration"] unsignedIntegerValue]];
+    dispatch_block_t verifyBatch = ^{
         waitForBatch(controller, 200, ^{
             check(![[controller valueForKey:@"cleaning"] boolValue], @"batch-finished");
             for (UIBarButtonItem *button in controller.navigationItem.rightBarButtonItems)
@@ -407,8 +444,37 @@ static void runCacheBatchFixtures(UIWindow *window, dispatch_block_t next)
                 next();
             });
         });
-    }];
+    };
+    NSDictionary *(^diagnostics)(void) = ^NSDictionary *{ return @{@"alert":controller.presentedViewController.title ?: @"nil"}; };
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [controller confirmClean];
+        awaitUIKitState(^BOOL { return [controller.presentedViewController isKindOfClass:UIAlertController.class] && !controller.presentedViewController.isBeingPresented; },
+            150, @"batch-cancel-confirmation-presented", diagnostics, ^{
+            UIAlertController *confirmation = (UIAlertController *)controller.presentedViewController;
+            NSUInteger destructive = 0, cancel = 0;
+            for (UIAlertAction *action in confirmation.actions) {
+                if (action.style == UIAlertActionStyleDestructive) destructive++;
+                if (action.style == UIAlertActionStyleCancel) cancel++;
+            }
+            check(destructive == 1 && cancel == 1, @"one-batch-confirmation-and-cancel");
+            check([confirmation.message containsString:@"Library/Caches and tmp"] && [confirmation.message containsString:@"cannot be undone"] &&
+                  [confirmation.message containsString:@"No backup"] && [confirmation.message containsString:@"Offline downloads"], @"batch-warning-retains-exact-permanent-scope-and-offline-loss");
+            invokeAlertAction(confirmation, UIAlertActionStyleCancel);
+            awaitUIKitState(^BOOL { return controller.presentedViewController == nil; }, 150, @"batch-cancel-dismissed", diagnostics, ^{
+                check([NSFileManager.defaultManager fileExistsAtPath:[first.targets[0] stringByAppendingPathComponent:@"sentinel"]] && ![[controller valueForKey:@"cleaning"] boolValue], @"actual-cache-cancel-preserves-data-without-worker");
+                [controller confirmClean];
+                awaitUIKitState(^BOOL { return [controller.presentedViewController isKindOfClass:UIAlertController.class] && !controller.presentedViewController.isBeingPresented; },
+                    150, @"batch-accept-confirmation-presented", diagnostics, ^{
+                    unselected.selected = YES; // Changes after the actual confirmation captured its batch.
+                    invokeAlertAction((UIAlertController *)controller.presentedViewController, UIAlertActionStyleDestructive);
+                    awaitUIKitState(^BOOL { return [[controller valueForKey:@"cleaning"] boolValue] || [[controller valueForKey:@"result"] hasPrefix:@"Freed "]; },
+                        150, @"actual-cache-confirm-action-starts-worker", diagnostics, verifyBatch);
+                });
+            });
+        });
+    });
 }
+
 static void invokeAlertAction(UIAlertController *alert, UIAlertActionStyle style)
 {
     check([alert isKindOfClass:UIAlertController.class], @"real-confirmation-is-visible");
@@ -650,6 +716,7 @@ static void runRecoveryConsentFixtures(UIWindow *window, dispatch_block_t next)
     UIImage *neutralMusic = wq_app_icon(@"com.example.uninstalled.music");
     check(neutralBook != nil && [UIImagePNGRepresentation(neutralBook) isEqual:UIImagePNGRepresentation(neutralMusic)], @"third-party-fallback-icons-do-not-guess-apple-services");
     runAppListStateFixtures(self.window);
+    runCacheListStateFixtures(self.window);
     NSDictionary *row = @{@"name": @"Disposable Fixture", @"bundleID": @"com.example.fixture", @"container": @"/fixture", @"containerPath": @"/fixture", @"hasAccess": @YES, @"hasIdentity": @YES, @"bytes": @123, @"cacheBytes": @123, @"limited": @YES};
     for (NSString *name in @[@"apps", @"clean"]) {
         WQScanTask *task = [WQScanTask taskNamed:name];
@@ -714,6 +781,7 @@ static void runRecoveryConsentFixtures(UIWindow *window, dispatch_block_t next)
         cacheCell = [caches tableView:caches.tableView cellForRowAtIndexPath:cacheRow];
         check([cacheCell.accessibilityValue isEqualToString:@"Access limited"], @"limited-cache-row-exposes-refusal-state");
         check(![[items.firstObject valueForKey:@"selected"] boolValue], @"cache-fixture-not-preselected");
+        runCacheSearchConfirmationFixture(tabs, caches, ^{
         WQScanTask *task = [WQScanTask taskNamed:@"clean"];
         NSUInteger generation = [task beginFresh:YES cancel:^{}];
         [task pause];
@@ -748,6 +816,7 @@ static void runRecoveryConsentFixtures(UIWindow *window, dispatch_block_t next)
                 }); });
             });
         }];
+        });
         });
     });
 }
