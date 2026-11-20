@@ -292,6 +292,7 @@ static void runCacheSearchConfirmationFixture(UITabBarController *tabs, WQCacheC
             check(tabs.selectedTab == tabs.tabs[1], @"cache-confirmation-restores-the-original-tab");
             check([[item valueForKey:@"selected"] boolValue], @"cache-confirmation-retains-manual-selection");
             check([search.searchBar.text isEqualToString:@"fixture"], @"cache-confirmation-retains-the-query");
+            check([[caches valueForKey:@"query"] isEqualToString:@"fixture"], @"cache-confirmation-retains-the-model-filter");
             [caches dismissViewControllerAnimated:NO completion:^{
                 [caches tableView:caches.tableView didSelectRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]];
                 search.searchBar.text = @"";
@@ -944,24 +945,37 @@ static void runRecoveryConsentFixtures(UIWindow *window, dispatch_block_t next)
         check(caches.traitCollection.userInterfaceStyle == UIUserInterfaceStyleLight, @"light-appearance");
         self.window.overrideUserInterfaceStyle = UIUserInterfaceStyleUnspecified;
         [self.window layoutIfNeeded];
-        tabs.selectedTab = tabs.tabs[0];
-        [self.window layoutIfNeeded];
-        [apps tableView:apps.tableView didSelectRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]];
-        UIAlertController *clear = (UIAlertController *)apps.presentedViewController;
-        check([clear isKindOfClass:UIAlertController.class], @"clear-data-confirmation");
-        NSUInteger destructive = 0, cancel = 0;
-        for (UIAlertAction *action in clear.actions) {
-            if (action.style == UIAlertActionStyleDestructive) destructive++;
-            if (action.style == UIAlertActionStyleCancel) cancel++;
-        }
-        check(destructive == 1 && cancel == 1, @"one-clear-data-confirmation-and-cancel");
-        [apps dismissViewControllerAnimated:NO completion:^{
-            runCacheBatchFixtures(self.window, ^{
-                runRealAppClearFixtures(self.window, ^{ runCacheStopFixture(self.window, ^{
-                    runCrashConfirmationFixtures(self.window, ^{ runDeferredClearResultFixture(self.window, ^{ runRecoveryConsentFixtures(self.window, ^{ [self beginLifecycleValidation]; }); }); });
-                }); });
+        selectFixtureTab(tabs, tabs.tabs[0]);
+        NSDictionary *(^confirmationDiagnostics)(void) = ^NSDictionary *{
+            return @{@"selectedTab":tabs.selectedTab.identifier ?: @"nil", @"visible":@(apps.view.window != nil),
+                @"busy":[apps valueForKey:@"busy"], @"alert":apps.presentedViewController.title ?: @"nil"};
+        };
+        awaitUIKitState(^BOOL { return tabs.selectedTab == tabs.tabs[0] && apps.view.window && appsNav.topViewController == apps; },
+            150, @"apps-tab-is-visible-before-its-row-is-tapped", confirmationDiagnostics, ^{
+            [apps tableView:apps.tableView didSelectRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]];
+            awaitUIKitState(^BOOL { return [apps.presentedViewController isKindOfClass:UIAlertController.class] && !apps.presentedViewController.isBeingPresented; },
+                150, @"clear-data-confirmation", confirmationDiagnostics, ^{
+                UIAlertController *clear = (UIAlertController *)apps.presentedViewController;
+                NSUInteger destructive = 0, cancel = 0;
+                for (UIAlertAction *action in clear.actions) {
+                    if (action.style == UIAlertActionStyleDestructive) destructive++;
+                    if (action.style == UIAlertActionStyleCancel) cancel++;
+                }
+                check(destructive == 1 && cancel == 1, @"one-clear-data-confirmation-and-cancel");
+                invokeAlertAction(clear, UIAlertActionStyleCancel);
+                awaitUIKitState(^BOOL { return !apps.presentedViewController; }, 150, @"app-cancel-has-completed-before-the-next-fixture", confirmationDiagnostics, ^{
+                    marker(@"navigation-passed");
+                    runCacheBatchFixtures(self.window, ^{
+                        runRealAppClearFixtures(self.window, ^{ runCacheStopFixture(self.window, ^{
+                            runCrashConfirmationFixtures(self.window, ^{ runDeferredClearResultFixture(self.window, ^{
+                                marker(@"mutation-passed");
+                                runRecoveryConsentFixtures(self.window, ^{ [self beginLifecycleValidation]; });
+                            }); });
+                        }); });
+                    });
+                });
             });
-        }];
+        });
         });
         });
     });

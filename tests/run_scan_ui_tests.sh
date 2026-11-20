@@ -55,13 +55,17 @@ for APPEARANCE in light dark; do
     xcrun simctl ui "$WQ_SIMULATOR_UDID" appearance "$APPEARANCE"
     xcrun simctl ui "$WQ_SIMULATOR_UDID" content_size accessibility-extra-extra-extra-large
     # Markers and diagnostics must belong to this run, not the previous profile.
-    rm -f -- "$DATA/Documents/ready-for-background" "$DATA/Documents/background-paused" \
+    rm -f -- "$DATA/Documents/navigation-passed" "$DATA/Documents/mutation-passed" "$DATA/Documents/ready-for-background" "$DATA/Documents/background-paused" \
         "$DATA/Documents/ready-to-terminate" "$DATA/Documents/recovery-passed" \
         "$DATA/Documents/search-navigation.log" "$DATA/Documents/ui-layout.log" "$DATA/Documents/ui-phase.log" "$DATA/Documents/ui-exception.log" "$DATA/Documents/ui-search-context.log" "$DATA/Documents/FAIL-"*
     LAUNCH=$(SIMCTL_CHILD_CH_EXPECTED_APPEARANCE="$APPEARANCE" xcrun simctl launch \
         --stdout="$OUT/$APPEARANCE-stdout.log" --stderr="$OUT/$APPEARANCE-stderr.log" "$WQ_SIMULATOR_UDID" "$BUNDLE")
     printf '%s\n' "$LAUNCH"
     UI_PID=${LAUNCH##*: }
+    # Each asserted test group retains the same bound; individual UIKit
+    # transitions still fail within 15 seconds. No state is skipped.
+    wait_marker navigation-passed
+    wait_marker mutation-passed
     wait_marker ready-for-background
     xcrun simctl launch "$WQ_SIMULATOR_UDID" com.apple.Preferences
     wait_marker background-paused
