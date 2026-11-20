@@ -2125,11 +2125,17 @@ NSString *wq_container_label(NSString *dir)
 
 NSString *wq_access_capability_failure(void)
 {
+    if (!WQAccessVersionAllowed(NSProcessInfo.processInfo.operatingSystemVersion))
+        return @"This iOS version is unsupported. Use iOS 26.0–26.7.2 or iOS 27.0–27.3 beta 1.";
     char build[64] = {0};
     size_t length = sizeof(build);
     if (sysctlbyname("kern.osversion", build, &length, NULL, 0) != 0)
         return @"The iOS build could not be checked. Access is disabled.";
-    if (WQWorseQueryPatchedBuild(@(build)))
+    size_t count = strnlen(build, sizeof(build));
+    NSString *identifier = count < sizeof(build) ? [[NSString alloc] initWithBytes:build length:count encoding:NSUTF8StringEncoding] : nil;
+    if (!WQAccessBuildIdentifierValid(identifier))
+        return @"The iOS build could not be checked. Access is disabled.";
+    if (WQWorseQueryPatchedBuild(identifier))
         return @"This iOS build has patched the access technique. charony supports the upstream range through iOS 27.3 beta 1.";
     return nil;
 }

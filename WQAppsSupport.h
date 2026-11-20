@@ -9,5 +9,7 @@ static inline BOOL WQAppsSupportBundleIDValid(NSString *bundleID)
         bad = [[NSCharacterSet characterSetWithCharactersInString:
                 @"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-_"] invertedSet];
     });
-    return [bundleID containsString:@"."] && [bundleID rangeOfCharacterFromSet:bad].location == NSNotFound;
+    // Some established apps use single-word identifiers (for example,
+    // pinterest). Keep the character/path guards without requiring a dot.
+    return [bundleID rangeOfCharacterFromSet:bad].location == NSNotFound;
 }
