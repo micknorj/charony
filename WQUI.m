@@ -179,9 +179,13 @@ static UIImage *wq_service_tile(NSString *bundleID)
         ];
     });
     NSString *key = bundleID.lowercaseString;
-    NSString *symbol = @"gearshape.fill";
+    NSString *symbol = @"app.fill";
     UIColor *color = UIColor.systemGrayColor;
-    for (NSArray *rule in rules) {
+    // Service keywords describe Apple components, not arbitrary third-party
+    // identifiers (for example, "facebook" must not become a Books icon).
+    BOOL apple = [key hasPrefix:@"com.apple."] || [key hasPrefix:@"group.com.apple."] ||
+                 [key hasPrefix:@"systemgroup.com.apple."];
+    for (NSArray *rule in apple ? rules : @[]) {
         BOOL hit = NO;
         for (NSString *word in rule[0]) if ([key containsString:word]) { hit = YES; break; }
         if (hit) { symbol = rule[1]; color = rule[2]; break; }
@@ -196,7 +200,7 @@ static UIImage *wq_service_tile(NSString *bundleID)
         [fill setFill];
         [[UIBezierPath bezierPathWithRoundedRect:CGRectMake(0, 0, s, s) cornerRadius:s * 0.225] fill];
         UIImageSymbolConfiguration *cfg = [UIImageSymbolConfiguration configurationWithPointSize:19 weight:UIImageSymbolWeightSemibold];
-        UIImage *g = [[UIImage systemImageNamed:symbol withConfiguration:cfg] ?: [UIImage systemImageNamed:@"gearshape.fill" withConfiguration:cfg]
+        UIImage *g = [[UIImage systemImageNamed:symbol withConfiguration:cfg] ?: [UIImage systemImageNamed:@"app.fill" withConfiguration:cfg]
                       imageWithTintColor:UIColor.whiteColor renderingMode:UIImageRenderingModeAlwaysOriginal];
         [g drawInRect:CGRectMake((s - g.size.width) / 2, (s - g.size.height) / 2, g.size.width, g.size.height)];
     }];

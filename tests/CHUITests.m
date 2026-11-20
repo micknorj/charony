@@ -1,10 +1,20 @@
-// Fixture-driven UIKit controller harness, no real container operations.
+// Real UIKit and mutation engines; only disposable, owned fixture containers.
 #import <UIKit/UIKit.h>
 #import "../WQScanTask.h"
 #import "../WQApps.h"
+#define WQ_ACCESS_TESTING 1
+#import "../WQAccess.m"
 #define WQ_CACHE_TESTING 1
 #import "../WQCache.m"
 #import "../WQUI.h"
+static NSString *CHFixtureContainers;
+static BOOL CHFixtureGrant(NSString *path)
+{
+    return CHFixtureContainers.length && [path hasPrefix:[CHFixtureContainers stringByAppendingString:@"/"]];
+}
+#define wq_grant CHFixtureGrant
+#import "../CHAppData.m"
+#undef wq_grant
 static void marker(NSString *name)
 {
     NSString *documents = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
@@ -185,6 +195,10 @@ static void runActiveSearchNavigationFixtures(UITabBarController *tabs, WQAppsVi
             selectFixtureTab(tabs, search);
             awaitUIKitState(searchReady, 150, @"search-reopens-after-restoration", diagnostics, ^{
                 check(searchReady(), @"search-reopens-after-restoration");
+                [apps tableView:apps.tableView didSelectRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]];
+                awaitUIKitState(^BOOL { return [apps.presentedViewController isKindOfClass:UIAlertController.class] && !apps.presentedViewController.isBeingPresented; },
+                    150, @"clear-confirmation-is-reachable-from-active-search", diagnostics, ^{
+                [apps dismissViewControllerAnimated:NO completion:^{
                 selectFixtureTab(tabs, cachesTab);
                 awaitUIKitState(^BOOL {return tabs.selectedTab == cachesTab && appsNav.topViewController == apps &&
                     ((UINavigationController *)tabs.selectedViewController).topViewController.view.window != nil;},
@@ -192,6 +206,8 @@ static void runActiveSearchNavigationFixtures(UITabBarController *tabs, WQAppsVi
                     check(tabs.selectedTab == cachesTab && appsNav.topViewController == apps, @"original-context-restored");
                     check(tabs.selectedViewController.view.window != nil, @"cache-content-visible-after-active-search");
                     next();
+                });
+                }];
                 });
             });
         });
@@ -408,6 +424,153 @@ static void runCacheBatchFixtures(UIWindow *window, dispatch_block_t next)
         });
     }];
 }
+static void invokeAlertAction(UIAlertController *alert, UIAlertActionStyle style)
+{
+    check([alert isKindOfClass:UIAlertController.class], @"real-confirmation-is-visible");
+    for (UIAlertAction *action in alert.actions) if (action.style == style) {
+        // UIKit exposes no public API to send a tap to an UIAlertAction.
+        // Invoke its actual registered handler; never substitute the worker.
+        void (^handler)(UIAlertAction *) = [action valueForKey:@"handler"];
+        if (handler) handler(action);
+        else [alert.presentingViewController dismissViewControllerAnimated:NO completion:nil];
+        return;
+    }
+    check(NO, @"required-confirmation-action-exists");
+}
+static _Atomic BOOL CHOperationReached, CHHoldOperation;
+static dispatch_semaphore_t CHOperationRelease;
+static void holdFixturePurge(void)
+{
+    CHOperationRelease = dispatch_semaphore_create(0);
+    atomic_store(&CHOperationReached, NO);
+    atomic_store(&CHHoldOperation, YES);
+    wq_test_tree_hook = ^(NSString *stage, NSString *__unused path) {
+        if ([stage isEqualToString:@"purgeBeforeUnlink"] && atomic_exchange(&CHHoldOperation, NO)) {
+            atomic_store(&CHOperationReached, YES);
+            dispatch_semaphore_wait(CHOperationRelease, DISPATCH_TIME_FOREVER);
+        }
+    };
+}
+static void releaseFixturePurge(void)
+{
+    dispatch_semaphore_signal(CHOperationRelease);
+    wq_test_tree_hook = nil;
+}
+static void runRealAppClearFixtures(UIWindow *window, dispatch_block_t next)
+{
+    NSFileManager *files = NSFileManager.defaultManager;
+    CHFixtureContainers = [WQCacheSafetyCanonicalPath(NSTemporaryDirectory()) stringByAppendingPathComponent:NSUUID.UUID.UUIDString];
+    CHTestApplicationRoot = CHFixtureContainers;
+    WQCacheFixtureRoot = CHFixtureContainers;
+    WQCacheItem *owned = cacheFixture(CHFixtureContainers), *unrelated = cacheFixture(CHFixtureContainers);
+    NSString *documents = [owned.containerPath stringByAppendingPathComponent:@"Documents"];
+    [files createDirectoryAtPath:documents withIntermediateDirectories:YES attributes:nil error:nil];
+    [@"disposable" writeToFile:[documents stringByAppendingPathComponent:@"sentinel"] atomically:YES encoding:NSUTF8StringEncoding error:nil];
+    struct stat st = {0};
+    check(lstat(owned.containerPath.fileSystemRepresentation, &st) == 0, @"capture-owned-app-identity");
+    NSDictionary *row = @{@"name":@"Disposable Fixture", @"bundleID":owned.bundleID, @"container":owned.containerPath,
+        @"bytes":@30, @"sizeKnown":@YES, @"hasAccess":@YES, @"hasIdentity":@YES,
+        @"containerDevice":@(st.st_dev), @"containerInode":@(st.st_ino)};
+    WQScanTask *task = [WQScanTask taskNamed:@"apps"];
+    NSUInteger generation = [task beginFresh:YES cancel:^{}];
+    [task finish:@{@"rows":@[row], @"complete":@YES} generation:generation];
+    CHFixtureApps *apps = [CHFixtureApps new];
+    window.rootViewController = [[UINavigationController alloc] initWithRootViewController:apps];
+    [window layoutIfNeeded];
+    NSDictionary *(^diagnostics)(void) = ^NSDictionary *{
+        return @{@"alert":apps.presentedViewController.title ?: @"nil", @"busy":[apps valueForKey:@"busy"],
+            @"pending":[apps valueForKey:@"pendingClearTitle"] ?: @"nil", @"reached":@(atomic_load(&CHOperationReached))};
+    };
+    dispatch_async(dispatch_get_main_queue(), ^{
+        NSIndexPath *index = [NSIndexPath indexPathForRow:0 inSection:0];
+        [apps tableView:apps.tableView didSelectRowAtIndexPath:index];
+        awaitUIKitState(^BOOL { return [apps.presentedViewController isKindOfClass:UIAlertController.class] && !apps.presentedViewController.isBeingPresented; },
+            150, @"app-cancel-confirmation-visible", diagnostics, ^{
+            UIAlertController *alert = (UIAlertController *)apps.presentedViewController;
+            check([alert.message containsString:@"Permanently"] && [alert.message containsString:@"No backup"] &&
+                  [alert.message containsString:@"Documents, Library and tmp"] && [alert.message containsString:@"Safari and Messages"],
+                  @"clear-confirmation-keeps-permanent-scope-and-best-effort-warning");
+            invokeAlertAction(alert, UIAlertActionStyleCancel);
+            awaitUIKitState(^BOOL { return apps.presentedViewController == nil; }, 150, @"app-cancel-dismissed", diagnostics, ^{
+                check([files fileExistsAtPath:[documents stringByAppendingPathComponent:@"sentinel"]] && ![[apps valueForKey:@"busy"] boolValue], @"actual-cancel-does-not-start-deletion");
+                [apps tableView:apps.tableView didSelectRowAtIndexPath:index];
+                awaitUIKitState(^BOOL { return [apps.presentedViewController isKindOfClass:UIAlertController.class] && !apps.presentedViewController.isBeingPresented; },
+                    150, @"app-accept-confirmation-visible", diagnostics, ^{
+                    holdFixturePurge();
+                    invokeAlertAction((UIAlertController *)apps.presentedViewController, UIAlertActionStyleDestructive);
+                    awaitUIKitState(^BOOL { return atomic_load(&CHOperationReached); }, 150, @"actual-confirm-action-starts-real-purge", diagnostics, ^{
+                        check([[apps valueForKey:@"busy"] boolValue], @"real-clear-progress-state");
+                        check(!wq_begin_mutation(apps), @"concurrent-mutation-is-refused");
+                        awaitUIKitState(^BOOL { return [apps.presentedViewController.title isEqualToString:@"Operation in progress"] && !apps.presentedViewController.isBeingPresented; },
+                            150, @"concurrency-refusal-alert-visible", diagnostics, ^{
+                            releaseFixturePurge();
+                            awaitUIKitState(^BOOL { return ![[apps valueForKey:@"busy"] boolValue] && [[apps valueForKey:@"pendingClearTitle"] isEqualToString:@"Data cleared"]; },
+                                150, @"real-worker-outcome-waits-behind-modal", diagnostics, ^{
+                                check([apps.presentedViewController.title isEqualToString:@"Operation in progress"], @"result-does-not-replace-active-modal");
+                                [apps dismissViewControllerAnimated:NO completion:^{
+                                    awaitUIKitState(^BOOL { return [apps.presentedViewController.title isEqualToString:@"Data cleared"] && !apps.presentedViewController.isBeingPresented; },
+                                        150, @"real-clear-outcome-delivered-once", diagnostics, ^{
+                                        for (NSString *part in @[@"Documents", @"Library", @"tmp"]) {
+                                            NSArray *left = [files contentsOfDirectoryAtPath:[owned.containerPath stringByAppendingPathComponent:part] error:nil];
+                                            check(left != nil && left.count == 0, @"real-app-clear-retains-empty-part-roots");
+                                        }
+                                        check([files fileExistsAtPath:[owned.containerPath stringByAppendingPathComponent:@".com.apple.mobile_container_manager.metadata.plist"]] &&
+                                              [files fileExistsAtPath:[unrelated.targets[0] stringByAppendingPathComponent:@"sentinel"]], @"app-clear-preserves-metadata-and-unrelated-container");
+                                        check(![files fileExistsAtPath:[CHFixtureContainers stringByAppendingPathComponent:@"Backups"]], @"real-app-clear-creates-no-backup");
+                                        [apps dismissViewControllerAnimated:NO completion:^{
+                                            [@"keep" writeToFile:[documents stringByAppendingPathComponent:@"sentinel"] atomically:YES encoding:NSUTF8StringEncoding error:nil];
+                                            [@{@"MCMMetadataIdentifier":@"com.example.changed"} writeToFile:[owned.containerPath stringByAppendingPathComponent:@".com.apple.mobile_container_manager.metadata.plist"] atomically:YES];
+                                            [apps tableView:apps.tableView didSelectRowAtIndexPath:index];
+                                            awaitUIKitState(^BOOL { return [apps.presentedViewController isKindOfClass:UIAlertController.class] && !apps.presentedViewController.isBeingPresented; },
+                                                150, @"changed-app-confirmation-visible", diagnostics, ^{
+                                                invokeAlertAction((UIAlertController *)apps.presentedViewController, UIAlertActionStyleDestructive);
+                                                awaitUIKitState(^BOOL { return [apps.presentedViewController.title isEqualToString:@"Clear incomplete"] && !apps.presentedViewController.isBeingPresented; },
+                                                    150, @"changed-app-identity-refused-by-real-action", diagnostics, ^{
+                                                    check([files fileExistsAtPath:[documents stringByAppendingPathComponent:@"sentinel"]], @"identity-failure-preserves-data");
+                                                    [apps dismissViewControllerAnimated:NO completion:^{
+                                                        [files removeItemAtPath:CHFixtureContainers error:nil];
+                                                        CHTestApplicationRoot = nil; CHFixtureContainers = nil; WQCacheFixtureRoot = nil;
+                                                        next();
+                                                    }];
+                                                });
+                                            });
+                                        }];
+                                    });
+                                }];
+                            });
+                        });
+                    });
+                });
+            });
+        });
+    });
+}
+static void runCacheStopFixture(UIWindow *window, dispatch_block_t next)
+{
+    NSString *root = [WQCacheSafetyCanonicalPath(NSTemporaryDirectory()) stringByAppendingPathComponent:NSUUID.UUID.UUIDString];
+    WQCacheFixtureRoot = root;
+    WQCacheItem *first = cacheFixture(root), *second = cacheFixture(root);
+    CHFixtureCaches *controller = [CHFixtureCaches new];
+    window.rootViewController = [[UINavigationController alloc] initWithRootViewController:controller];
+    [controller loadViewIfNeeded];
+    [controller setValue:@[first, second] forKey:@"items"];
+    holdFixturePurge();
+    [controller cleanItems:@[first, second] generation:[[controller valueForKey:@"scanGeneration"] unsignedIntegerValue]];
+    NSDictionary *(^diagnostics)(void) = ^NSDictionary *{ return @{@"result":[controller valueForKey:@"result"] ?: @"nil"}; };
+    awaitUIKitState(^BOOL { return atomic_load(&CHOperationReached); }, 150, @"cache-stop-reaches-real-purge", diagnostics, ^{
+        [controller stopClean];
+        releaseFixturePurge();
+        waitForBatch(controller, 200, ^{
+            NSString *result = [controller valueForKey:@"result"];
+            check([result hasPrefix:@"Stopped."] && ![result containsString:@"access denied or data changed"], @"user-stop-is-distinct-from-access-failure");
+            check([NSFileManager.defaultManager fileExistsAtPath:[second.targets[0] stringByAppendingPathComponent:@"sentinel"]], @"stop-preserves-later-batch-items");
+            [NSFileManager.defaultManager removeItemAtPath:root error:nil];
+            WQCacheFixtureRoot = nil;
+            next();
+        });
+    });
+}
+
 @interface CHFixtureScene : UIResponder <UIWindowSceneDelegate>
 @property (nonatomic, strong) UIWindow *window;
 @property (nonatomic, strong) WQScanTask *lifecycleTask;
@@ -445,6 +608,9 @@ static void runCacheBatchFixtures(UIWindow *window, dispatch_block_t next)
         return;
     }
     self.window = [[UIWindow alloc] initWithWindowScene:(UIWindowScene *)scene];
+    UIImage *neutralBook = wq_app_icon(@"com.example.uninstalled.facebook");
+    UIImage *neutralMusic = wq_app_icon(@"com.example.uninstalled.music");
+    check(neutralBook != nil && [UIImagePNGRepresentation(neutralBook) isEqual:UIImagePNGRepresentation(neutralMusic)], @"third-party-fallback-icons-do-not-guess-apple-services");
     runAppListStateFixtures(self.window);
     NSDictionary *row = @{@"name": @"Disposable Fixture", @"bundleID": @"com.example.fixture", @"container": @"/fixture", @"containerPath": @"/fixture", @"hasAccess": @YES, @"hasIdentity": @YES, @"bytes": @123, @"cacheBytes": @123, @"limited": @YES};
     for (NSString *name in @[@"apps", @"clean"]) {
@@ -536,7 +702,9 @@ static void runCacheBatchFixtures(UIWindow *window, dispatch_block_t next)
         check(destructive == 1 && cancel == 1, @"one-clear-data-confirmation-and-cancel");
         [apps dismissViewControllerAnimated:NO completion:^{
             runCacheBatchFixtures(self.window, ^{
-                runDeferredClearResultFixture(self.window, ^{ [self beginLifecycleValidation]; });
+                runRealAppClearFixtures(self.window, ^{ runCacheStopFixture(self.window, ^{
+                    runDeferredClearResultFixture(self.window, ^{ [self beginLifecycleValidation]; });
+                }); });
             });
         }];
         });
