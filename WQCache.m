@@ -109,20 +109,6 @@ static NSString *WQCacheConfirmationScope(NSArray<WQCacheItem *> *items)
     return WQLocalized(@"Delete the selected cache targets");
 }
 
-static NSString *WQCacheFooterScope(NSArray<WQCacheItem *> *items)
-{
-    BOOL hasApps = NO, hasCrashLogs = NO;
-    WQCacheSelectionCategories(items, &hasApps, &hasCrashLogs, NULL);
-    if (hasApps && hasCrashLogs) {
-        return WQLocalized(@"Clears each selected app's Library/Caches and tmp, and deletes selected Crash Logs. Apps rebuild their caches as you use them; some keep offline content (music, maps, downloads) there and will download it again. No backup is kept.");
-    }
-    if (hasApps) {
-        return WQLocalized(@"Clears each selected app's Library/Caches and tmp. Apps rebuild their caches as you use them; some keep offline content (music, maps, downloads) there and will download it again. No backup is kept.");
-    }
-    if (hasCrashLogs) return WQLocalized(@"Deletes selected Crash Logs. This cannot be undone. No backup is kept.");
-    return WQLocalized(@"Select app caches or Crash Logs to see the deletion scope. No backup is kept.");
-}
-
 typedef NS_ENUM(NSInteger, WQCacheMeasurementState) {
     WQCacheMeasurementMissing,
     WQCacheMeasurementKnown,
@@ -283,118 +269,8 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
     return YES;
 }
 
-// Row: selection circle, icon, name with "cache · temp" below, size in a
-// fixed right-hand column so long names never push it out.
-@interface WQCleanerCell : UITableViewCell
-@property (nonatomic, strong) UIImageView *checkView, *iconView;
-@property (nonatomic, strong) UILabel *nameLabel, *detailLabel, *sizeLabel;
-@end
-
-@implementation WQCleanerCell
-
-- (instancetype)initWithStyle:(UITableViewCellStyle)style reuseIdentifier:(NSString *)reuseIdentifier
-{
-    if ((self = [super initWithStyle:style reuseIdentifier:reuseIdentifier])) {
-        _checkView = [UIImageView new];
-        _checkView.contentMode = UIViewContentModeScaleAspectFit;
-        _iconView = [UIImageView new];
-        _iconView.contentMode = UIViewContentModeScaleAspectFit;
-        _iconView.layer.cornerRadius = 8;
-        _iconView.layer.cornerCurve = kCACornerCurveContinuous;
-        _iconView.clipsToBounds = YES;
-        _nameLabel = [UILabel new];
-        _nameLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleBody];
-        _nameLabel.lineBreakMode = NSLineBreakByTruncatingMiddle;
-        _detailLabel = [UILabel new];
-        _detailLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleFootnote];
-        _detailLabel.textColor = UIColor.secondaryLabelColor;
-        _detailLabel.lineBreakMode = NSLineBreakByTruncatingMiddle;
-        _sizeLabel = [UILabel new];
-        _sizeLabel.font = [UIFont monospacedDigitSystemFontOfSize:15 weight:UIFontWeightSemibold];
-        // Trailing edge in both layout directions.
-        _sizeLabel.textAlignment = [UIView userInterfaceLayoutDirectionForSemanticContentAttribute:self.semanticContentAttribute]
-            == UIUserInterfaceLayoutDirectionRightToLeft ? NSTextAlignmentLeft : NSTextAlignmentRight;
-        for (UIView *v in @[_checkView, _iconView, _nameLabel, _detailLabel, _sizeLabel]) {
-            v.translatesAutoresizingMaskIntoConstraints = NO;
-            [self.contentView addSubview:v];
-        }
-        [_sizeLabel setContentCompressionResistancePriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];
-        [_sizeLabel setContentHuggingPriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];
-        UILayoutGuide *m = self.contentView.layoutMarginsGuide;
-        [NSLayoutConstraint activateConstraints:@[
-            [_checkView.leadingAnchor constraintEqualToAnchor:m.leadingAnchor],
-            [_checkView.centerYAnchor constraintEqualToAnchor:self.contentView.centerYAnchor],
-            [_checkView.widthAnchor constraintEqualToConstant:24],
-            [_checkView.heightAnchor constraintEqualToConstant:24],
-            [_iconView.leadingAnchor constraintEqualToAnchor:_checkView.trailingAnchor constant:12],
-            [_iconView.centerYAnchor constraintEqualToAnchor:self.contentView.centerYAnchor],
-            [_iconView.widthAnchor constraintEqualToConstant:36],
-            [_iconView.heightAnchor constraintEqualToConstant:36],
-            [_sizeLabel.trailingAnchor constraintEqualToAnchor:m.trailingAnchor],
-            [_sizeLabel.centerYAnchor constraintEqualToAnchor:self.contentView.centerYAnchor],
-            [_sizeLabel.widthAnchor constraintGreaterThanOrEqualToConstant:76],
-            [_nameLabel.leadingAnchor constraintEqualToAnchor:_iconView.trailingAnchor constant:12],
-            [_nameLabel.trailingAnchor constraintLessThanOrEqualToAnchor:_sizeLabel.leadingAnchor constant:-8],
-            [_nameLabel.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:11],
-            [_detailLabel.leadingAnchor constraintEqualToAnchor:_nameLabel.leadingAnchor],
-            [_detailLabel.trailingAnchor constraintLessThanOrEqualToAnchor:_sizeLabel.leadingAnchor constant:-8],
-            [_detailLabel.topAnchor constraintEqualToAnchor:_nameLabel.bottomAnchor constant:2],
-            [_detailLabel.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor constant:-11],
-        ]];
-    }
-    return self;
-}
-
-@end
-
-// Summary card: reclaimable total, a bar for the selected share, status.
-@interface WQSummaryCell : UITableViewCell
-@property (nonatomic, strong) UILabel *captionLabel, *totalLabel, *statusLabel;
-@property (nonatomic, strong) UIProgressView *bar;
-@property (nonatomic, strong) UIActivityIndicatorView *spinner;
-@end
-
-@implementation WQSummaryCell
-
-- (instancetype)initWithStyle:(UITableViewCellStyle)style reuseIdentifier:(NSString *)reuseIdentifier
-{
-    if ((self = [super initWithStyle:style reuseIdentifier:reuseIdentifier])) {
-        self.selectionStyle = UITableViewCellSelectionStyleNone;
-        _captionLabel = [UILabel new];
-        _captionLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleSubheadline];
-        _captionLabel.textColor = UIColor.secondaryLabelColor;
-        _totalLabel = [UILabel new];
-        _totalLabel.font = [[UIFontMetrics metricsForTextStyle:UIFontTextStyleLargeTitle]
-                            scaledFontForFont:[UIFont systemFontOfSize:34 weight:UIFontWeightBold]];
-        _totalLabel.adjustsFontForContentSizeCategory = YES;
-        _bar = [[UIProgressView alloc] initWithProgressViewStyle:UIProgressViewStyleDefault];
-        _bar.progressTintColor = UIColor.systemBlueColor;
-        _statusLabel = [UILabel new];
-        _statusLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleFootnote];
-        _statusLabel.textColor = UIColor.secondaryLabelColor;
-        _statusLabel.numberOfLines = 0;
-        _spinner = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleMedium];
-        _spinner.hidesWhenStopped = YES;
-        UIStackView *captionRow = [[UIStackView alloc] initWithArrangedSubviews:@[_captionLabel, _spinner]];
-        captionRow.spacing = 8;
-        captionRow.alignment = UIStackViewAlignmentCenter;
-        UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:@[captionRow, _totalLabel, _bar, _statusLabel]];
-        stack.axis = UILayoutConstraintAxisVertical;
-        stack.spacing = 6;
-        [stack setCustomSpacing:10 afterView:_totalLabel];
-        stack.translatesAutoresizingMaskIntoConstraints = NO;
-        [self.contentView addSubview:stack];
-        UILayoutGuide *m = self.contentView.layoutMarginsGuide;
-        [NSLayoutConstraint activateConstraints:@[
-            [stack.leadingAnchor constraintEqualToAnchor:m.leadingAnchor],
-            [stack.trailingAnchor constraintEqualToAnchor:m.trailingAnchor],
-            [stack.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:14],
-            [stack.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor constant:-14],
-        ]];
-    }
-    return self;
-}
-
+@interface WQCacheCleanerViewController ()
+@property (nonatomic) NSInteger filter;
 @end
 
 @implementation WQCacheCleanerViewController {
@@ -407,18 +283,17 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
     NSString *_query;
     NSString *_status;   // scan / clean progress, nil when idle
     NSString *_result;   // last clean result
-    BOOL _scanning, _cleaning, _scanLimited, _cleanRequiresRescan;
+    BOOL _scanning, _cleaning, _cleanRequiresRescan;
     // A refresh asked for while cleaning runs once the cleaning has ended:
     // a scan must not replace the list (or the Stop button) under it.
     BOOL _refreshAfterClean, _rescanAfterClean;
-    WQScanCancellation *_scanCancellation;
+
     WQScanCancellation *_cleanCancellation;
     NSUInteger _scanGeneration;
     float _scanProgress;   // 0…1 while scanning
-    unsigned long long _scanBytes;   // found so far while scanning
 }
 
-- (instancetype)init { return [super initWithStyle:UITableViewStyleInsetGrouped]; }
+- (instancetype)init { return [super initWithStyle:UITableViewStylePlain]; }
 
 
 - (NSDictionary *)snapshotRows:(NSArray<WQCacheItem *> *)rows note:(NSString *)note
@@ -462,17 +337,13 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
         [self rebuildVisibleItems];
     }
     _scanning = _scanTask.running;
+    NSString *note = [result[@"note"] isKindOfClass:NSString.class] ? result[@"note"] : nil;
+    if (!note.length) note = nil;
     _status = _scanning ? (_scanTask.paused ? WQLocalized(@"Scan paused") :
         (_scanTask.status.length ? WQLocalized(_scanTask.status) : WQLocalized(@"Scan queued; previous results kept"))) :
-        (_scanTask.status.length ? WQLocalized(_scanTask.status) : ([result[@"note"] isKindOfClass:NSString.class] ? result[@"note"] : nil));
-    if (_scanTask.finishedAt) {
-        NSString *date = [NSDateFormatter localizedStringFromDate:_scanTask.finishedAt dateStyle:NSDateFormatterShortStyle timeStyle:NSDateFormatterShortStyle];
-        self.navigationItem.prompt = WQLocalizedFormat(@"Last scanned %@ · Pull to refresh", date);
-    }
-    if (_scanTask.persistenceFailed) self.navigationItem.prompt = WQLocalized(@"Could not save scan state. Keep charony open.");
+        (_scanTask.status.length ? WQLocalized(_scanTask.status) : note);
     if (!_scanning) [self.refreshControl endRefreshing];
-    [self.tableView reloadData];
-    [self updateButtons];
+    [self updatePresentation];
 }
 
 - (void)toggleScan
@@ -489,23 +360,30 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
 - (void)viewDidLoad
 {
     [super viewDidLoad];
-    self.title = WQLocalizedNullable(@"Caches");
-    self.tabBarItem.title = @"Caches";
+    wq_prepare_list(self, @"Caches");
     UISearchController *search = [[UISearchController alloc] initWithSearchResultsController:nil];
     search.searchResultsUpdater = self;
     search.obscuresBackgroundDuringPresentation = NO;
-    search.searchBar.placeholder = WQLocalizedNullable(@"Search apps");
+    search.searchBar.placeholder = @"Search caches";
+    search.searchBar.maximumContentSizeCategory = UIContentSizeCategoryLarge;
+    search.searchBar.searchTextField.maximumContentSizeCategory = UIContentSizeCategoryLarge;
+    search.searchBar.searchTextField.adjustsFontForContentSizeCategory = YES;
+    search.searchBar.searchTextField.font = wq_font(UIFontTextStyleBody, self.traitCollection);
     _contextSearchController = search;
     self.definesPresentationContext = YES;
     self.refreshControl = [UIRefreshControl new];
     [self.refreshControl addTarget:self action:@selector(userRefresh) forControlEvents:UIControlEventValueChanged];
     _scanTask = [WQScanTask taskNamed:@"clean"];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(scanTaskChanged:) name:WQScanTaskChangedNotification object:_scanTask];
+    [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(contentSizeChanged:) name:UIContentSizeCategoryDidChangeNotification object:nil];
     [self scanTaskChanged:nil];
-    if (!_scanTask.running && !_scanTask.userPaused && (!_scanTask.result || _scanTask.interrupted)) {
-        _resumeScan = _scanTask.interrupted;
-        [self scan];
-    }
+}
+
+- (void)contentSizeChanged:(NSNotification *)notification
+{
+    [self updatePresentation];
+    _contextSearchController.searchBar.searchTextField.font = wq_font(UIFontTextStyleBody, self.traitCollection);
+    ((UILabel *)self.navigationItem.leftBarButtonItem.customView).font = wq_font(UIFontTextStyleHeadline, self.traitCollection);
 }
 
 - (void)viewWillAppear:(BOOL)animated
@@ -536,13 +414,11 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
 
 - (void)rebuildVisibleItems
 {
-    if (!_query.length) {
-        _visibleItems = _items;
-        return;
-    }
-    _visibleItems = [_items filteredArrayUsingPredicate:[NSPredicate predicateWithBlock:^BOOL(WQCacheItem *it, NSDictionary *__unused b) {
-        return [it.name localizedCaseInsensitiveContainsString:self->_query] ||
-               (it.bundleID && [it.bundleID localizedCaseInsensitiveContainsString:self->_query]);
+    _visibleItems = [_items filteredArrayUsingPredicate:[NSPredicate predicateWithBlock:^BOOL(WQCacheItem *item, NSDictionary *__unused bindings) {
+        if (self->_filter == 1 && item.crashLogs) return NO;
+        if (self->_filter == 2 && !item.crashLogs) return NO;
+        return !self->_query.length || [item.name localizedCaseInsensitiveContainsString:self->_query] ||
+            [item.bundleID localizedCaseInsensitiveContainsString:self->_query];
     }]];
 }
 
@@ -550,12 +426,10 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
 {
     _query = [searchController.searchBar.text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet];
     [self rebuildVisibleItems];
-    [self.tableView reloadData];
-    [self updateButtons];
+    [self updatePresentation];
 }
 
-// While scanning, the bar shows how far the scan is; otherwise how much of
-// the reclaimable space is selected.
+// Progress reflects the current scan step.
 - (void)setStatus:(NSString *)status progress:(float)progress
 {
     _scanProgress = MAX(_scanProgress, MIN(1.0f, progress));
@@ -566,29 +440,62 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
 {
     if (_scanning && !_cleaning) [_scanTask progress:status generation:_scanTask.generation];
     _status = status;
-    [self.tableView reloadSections:[NSIndexSet indexSetWithIndex:0] withRowAnimation:UITableViewRowAnimationNone];
+    [self updatePresentation];
+}
+
+- (NSString *)statusText
+{
+    NSString *status = _status;
+    if (!status.length && _scanTask.interrupted) status = @"Scan interrupted. Resume to continue.";
+    if (_scanTask.persistenceFailed) status = status.length ? [status stringByAppendingString:@"\nCould not save scan state. Keep charony open."] : @"Could not save scan state. Keep charony open.";
+    if (_result.length && status.length) return [NSString stringWithFormat:@"%@\n%@", _result, status];
+    return _result.length ? _result : status;
+}
+
+- (void)updatePresentation
+{
+    NSString *message = [self statusText];
+    if (!self.visibleItems.count && !message.length)
+        message = !_shownScanResult ? @"Refresh to update" : ((_query.length || _filter > 0) ? @"No results" : @"No caches found");
+    wq_empty_message(self.tableView, self.visibleItems.count ? nil : message, _scanning && !_scanTask.paused ? _scanProgress : -1);
+    [self.tableView reloadData];
+    [self updateButtons];
 }
 
 - (void)updateButtons
 {
-    // Stop stays while cleaning, whatever else happens.
+    __weak typeof(self) weakSelf = self;
+    NSMutableArray<UIMenuElement *> *actions = [NSMutableArray new];
+    NSArray *titles = @[@"All", @"App Caches", @"Crash Logs"];
+    for (NSInteger i = 0; i < (NSInteger)titles.count; i++) {
+        UIAction *action = [UIAction actionWithTitle:titles[(NSUInteger)i] image:nil identifier:nil handler:^(UIAction *__unused a) {
+            weakSelf.filter = i;
+            [weakSelf rebuildVisibleItems];
+            [weakSelf updatePresentation];
+        }];
+        action.state = _filter == i ? UIMenuElementStateOn : UIMenuElementStateOff;
+        [actions addObject:action];
+    }
+    if (_scanTask.running || _scanTask.userPaused || _scanTask.interrupted) {
+        [actions addObject:[UIAction actionWithTitle:_scanTask.running ? @"Pause Scan" : @"Resume Scan" image:nil identifier:nil handler:^(UIAction *__unused action) { [weakSelf toggleScan]; }]];
+    }
+    UIBarButtonItem *menu = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"ellipsis"] menu:[UIMenu menuWithChildren:actions]];
+    menu.accessibilityLabel = @"Filters and scan controls";
+    menu.accessibilityIdentifier = @"filters";
+    menu.enabled = !_cleaning;
+    NSMutableArray *buttons = [NSMutableArray arrayWithObjects:menu, wq_refresh_button(self, @selector(userRefresh), !_cleaning), nil];
     if (_cleaning) {
-        UIBarButtonItem *stop = [[UIBarButtonItem alloc] initWithTitle:WQLocalizedNullable(@"Stop") style:UIBarButtonItemStylePlain
-                                                                 target:self action:@selector(stopClean)];
-        self.navigationItem.rightBarButtonItems = @[stop];
-        return;
+        [buttons addObject:[[UIBarButtonItem alloc] initWithTitle:@"Stop" style:UIBarButtonItemStylePlain target:self action:@selector(stopClean)]];
+    } else {
+        NSUInteger selected = 0;
+        for (WQCacheItem *item in _items) if (item.selected) selected++;
+        if (selected) {
+            UIBarButtonItem *clean = [[UIBarButtonItem alloc] initWithTitle:@"Clean" style:UIBarButtonItemStylePlain target:self action:@selector(confirmClean)];
+            clean.enabled = !_scanning && !_scanTask.userPaused && !_cleanRequiresRescan;
+            [buttons addObject:clean];
+        }
     }
-    if (_scanning || _scanTask.userPaused) {
-        self.navigationItem.rightBarButtonItems = @[[[UIBarButtonItem alloc] initWithTitle:WQLocalized(_scanning ? @"Pause Scan" : @"Resume Scan")
-            style:UIBarButtonItemStylePlain target:self action:@selector(toggleScan)]];
-        return;
-    }
-    NSUInteger n = 0;
-    for (WQCacheItem *it in _items) if (it.selected) n++;
-    UIBarButtonItem *clean = [[UIBarButtonItem alloc] initWithTitle:WQLocalizedNullable(@"Clean") style:wq_primary_button_style()
-                                                             target:self action:@selector(confirmClean)];
-    clean.enabled = n > 0 && !_cleanRequiresRescan;
-    self.navigationItem.rightBarButtonItems = @[clean];
+    self.navigationItem.rightBarButtonItems = buttons;
 }
 
 // Pull to refresh: rescan the containers instead of reusing the shared scan,
@@ -634,12 +541,11 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
     _resumeScan = NO;
     if (!taskGeneration) return;
     NSString *taskID = _scanTask.identifier;
-    _scanCancellation = cancellation;
+
     NSUInteger generation = ++_scanGeneration;
     _scanning = YES;
     _scanProgress = 0;
-    _scanBytes = 0;
-    _scanLimited = NO;
+
     _cleanRequiresRescan = NO;
     _result = nil;
     [self updateButtons];
@@ -650,14 +556,11 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
             [self->_scanTask progress:WQLocalized(@"Finding apps…") generation:taskGeneration];
         });
         NSMutableArray<WQCacheItem *> *items = [NSMutableArray new];
-        NSMutableArray<NSString *> *emptyRoots = [NSMutableArray new];
         BOOL scanLimited = NO;
         NSUInteger failedEnumerations = 0;
         NSUInteger limitedContainers = 0;
         NSUInteger limitedMeasurements = 0;
         NSUInteger missingIdentities = 0;
-        NSUInteger checkedContainers = 0;
-        __block unsigned long long foundBytes = 0;
 
         NSArray *roots = @[@"/private/var/mobile/Containers/Data/Application",
                            @"/private/var/mobile/Containers/Data/PluginKitPlugin"];
@@ -687,17 +590,14 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
             });
             wq_load_display_names();
         }
-            if (!containers.count) [emptyRoots addObject:kind];
             NSUInteger idx = 0;
-            checkedContainers += containers.count;
             for (NSString *c in containers) {
                 if (cancellation.isCancelled) return;
                 idx++;
                 if (idx % 10 == 0 || idx == containers.count) {
-                    unsigned long long soFar = foundBytes;
                     dispatch_async(dispatch_get_main_queue(), ^{
                         if (generation != self->_scanGeneration || cancellation.isCancelled) return;
-                        self->_scanBytes = soFar;
+
                         [self setStatus:WQLocalizedFormat(@"Measuring %@ %lu of %lu…", kind,
                                          (unsigned long)idx, (unsigned long)containers.count)
                                progress:base + share * (0.1f + 0.9f * (float)idx / (float)containers.count)];
@@ -732,7 +632,6 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
                 }
                 BOOL cacheKnown = cacheState != WQCacheMeasurementLimited;
                 BOOL tempKnown = tempState != WQCacheMeasurementLimited;
-                foundBytes += cacheBytes + tempBytes;
                 if (cacheKnown && tempKnown && cacheBytes + tempBytes < 64 * 1024) continue;
                 WQCacheItem *item = [WQCacheItem new];
                 NSString *bid = granted ? wq_container_label(c) : nil;
@@ -818,53 +717,9 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
         [items sortUsingComparator:^NSComparisonResult(WQCacheItem *a, WQCacheItem *b) {
             return a.bytes > b.bytes ? NSOrderedAscending : (a.bytes < b.bytes ? NSOrderedDescending : NSOrderedSame);
         }];
-        NSMutableArray<NSString *> *notes = [NSMutableArray new];
-        if (failedEnumerations) {
-            [notes addObject:WQLocalizedFormat(failedEnumerations == 1
-                ? @"%lu container enumeration failed" : @"%lu container enumerations failed",
-                (unsigned long)failedEnumerations)];
-        }
-        if (limitedContainers) {
-            [notes addObject:WQLocalizedFormat(limitedContainers == 1
-                ? @"%lu container had limited access" : @"%lu containers had limited access",
-                (unsigned long)limitedContainers)];
-        }
-        if (limitedMeasurements) {
-            [notes addObject:WQLocalizedFormat(limitedMeasurements == 1
-                ? @"%lu cache tree measurement was limited" : @"%lu cache tree measurements were limited",
-                (unsigned long)limitedMeasurements)];
-        }
-        if (missingIdentities) {
-            [notes addObject:WQLocalizedFormat(missingIdentities == 1
-                ? @"%lu container had no identifier or identity" : @"%lu containers had no identifier or identity",
-                (unsigned long)missingIdentities)];
-        }
-        NSString *note = nil;
-        // No containers at all matters more than one limited measurement.
-        if (scanLimited && emptyRoots.count) {
-            NSString *empty = WQLocalizedFormat(emptyRoots.count == 1 ? @"No %@ container found." : @"No %@ containers found.",
-                                                [emptyRoots componentsJoinedByString:@" or "]);
-            [notes insertObject:[empty stringByTrimmingCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@".。"]] atIndex:0];
-        }
-        // Only app and extension problems make the scan incomplete; Crash
-        // Logs that can't be measured get their own sentence. A list without
-        // app rows says how many were checked (everything was already clean
-        // looked like a broken scan).
-        NSUInteger appRows = 0;
-        for (WQCacheItem *item in items) if (!item.crashLogs) appRows++;
-        NSMutableArray<NSString *> *sentences = [NSMutableArray new];
-        if (!appRows && checkedContainers && !failedEnumerations && !limitedContainers)
-            [sentences addObject:WQLocalizedFormat(@"%lu apps and extensions checked: none has 64 KB or more in its caches and temporary files.",
-                                                   (unsigned long)checkedContainers)];
-        if (notes.count) {
-            [notes addObject:WQLocalized(@"limited rows are excluded; the remaining rows can still be cleaned")];
-            [sentences addObject:WQLocalizedFormat(@"Scan incomplete: %@. Pull to refresh to retry.", [notes componentsJoinedByString:@"; "])];
-        } else if (emptyRoots.count) {
-            [sentences addObject:WQLocalizedFormat(emptyRoots.count == 1 ? @"No %@ container found." : @"No %@ containers found.",
-                                                   [emptyRoots componentsJoinedByString:@" or "])];
-        }
-        if (crashLimited) [sentences addObject:WQLocalized(@"Crash Logs can't be fully measured on this device.")];
-        if (sentences.count) note = [sentences componentsJoinedByString:@" "];
+        NSString *note = !wq_app_group() ? @"An App Group is required. Re-sign charony preserving its App Group entitlement." :
+            failedEnumerations ? @"Discovery incomplete. Refresh to retry." :
+            (limitedContainers || limitedMeasurements || missingIdentities || scanLimited || crashLimited) ? @"Access incomplete. Limited rows cannot be cleaned." : nil;
 
         dispatch_async(dispatch_get_main_queue(), ^{
             if (generation != self->_scanGeneration || cancellation.isCancelled) return;
@@ -880,87 +735,61 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
 
 #pragma mark Table
 
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { return 2; }
-
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
 {
-    return section == 0 ? 1 : (NSInteger)self.visibleItems.count;
+    (void)tableView; (void)section;
+    return (NSInteger)self.visibleItems.count;
 }
 
-- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section
+- (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section
 {
-    if (section == 0 || !_items.count) return nil;
-    NSUInteger shown = self.visibleItems.count;
-    NSUInteger appCount = 0;
-    for (WQCacheItem *item in _items) if (!item.crashLogs) appCount++;
-    if (!appCount) return WQLocalized(@"Crash Logs");
-    return _query.length ? WQLocalizedFormat(@"%lu of %lu", (unsigned long)shown, (unsigned long)_items.count)
-                         : WQLocalizedFormat(@"%lu apps and extensions", (unsigned long)appCount);
-}
-
-- (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section
-{
-    if (section == 0 || !_items.count) return nil;
-    NSArray<WQCacheItem *> *selected = [_items filteredArrayUsingPredicate:
-        [NSPredicate predicateWithFormat:@"selected == YES"]];
-    return [WQCacheFooterScope(selected) stringByAppendingString:WQLocalized(@" Close running apps first.")];
+    (void)section;
+    NSString *status = [self statusText];
+    if (!self.visibleItems.count || !status.length) return nil;
+    WQProgressHeaderView *header = [tableView dequeueReusableHeaderFooterViewWithIdentifier:@"progress"]
+        ?: [[WQProgressHeaderView alloc] initWithReuseIdentifier:@"progress"];
+    [header setText:status fraction:_scanning && !_scanTask.paused ? _scanProgress : -1];
+    return header;
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
 {
-    if (indexPath.section == 0) {
-        WQSummaryCell *cell = [tableView dequeueReusableCellWithIdentifier:@"summary"]
-            ?: [[WQSummaryCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:@"summary"];
-        unsigned long long total = 0, selected = 0;
-        NSUInteger n = 0;
-        for (WQCacheItem *it in _items) { total += it.bytes; if (it.selected) { selected += it.bytes; n++; } }
-        BOOL busy = _scanning || _cleaning;
-        cell.captionLabel.text = busy ? (_cleaning ? WQLocalized(@"Cleaning") : WQLocalized(@"Scanning")) : WQLocalized(@"Reclaimable");
-        if (busy) [cell.spinner startAnimating]; else [cell.spinner stopAnimating];
-        // While the first scan runs, the total found so far counts up.
-        cell.totalLabel.text = wq_size_text((_scanning && !_items.count) ? _scanBytes : total);
-        cell.bar.progress = _scanning ? _scanProgress : total ? (float)((double)selected / (double)total) : 0;
-        cell.bar.hidden = NO;
-        cell.statusLabel.text = _status ?: _result
-            ?: WQLocalizedFormat(n == 1 ? @"%@ selected in %lu item" : @"%@ selected in %lu items",
-                                 wq_size_text(selected), (unsigned long)n);
-        return cell;
-    }
-    WQCleanerCell *cell = [tableView dequeueReusableCellWithIdentifier:@"item"]
-        ?: [[WQCleanerCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:@"item"];
+    UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"item"]
+        ?: [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:@"item"];
     WQCacheItem *item = self.visibleItems[(NSUInteger)indexPath.row];
-    cell.nameLabel.text = item.name;
-    if (item.crashLogs) {
-        cell.detailLabel.text = item.cacheKnown ? WQVerbatim([NSString stringWithFormat:@"%@ · CrashReporter", WQLocalized(@"Crash Logs")]) : WQLocalized(@"Crash Logs · access limited");
-    } else {
-        NSString *cache = item.cacheKnown ? wq_size_text(item.cacheBytes) : WQLocalized(@"unknown");
-        NSString *temp = item.tempKnown ? wq_size_text(item.tempBytes) : WQLocalized(@"unknown");
-        cell.detailLabel.text = WQLocalizedFormat(@"cache %@ · temp %@%@", cache, temp,
-                                 item.limited ? WQLocalized(@" · access limited") : @"");
-    }
-    cell.sizeLabel.text = wq_size_text(item.bytes);
-    cell.iconView.image = wq_app_icon(item.bundleID)
-        ?: [UIImage systemImageNamed:item.bundleID ? @"app.dashed" : @"exclamationmark.triangle"];
-    cell.iconView.tintColor = UIColor.secondaryLabelColor;
-    cell.checkView.image = [UIImage systemImageNamed:item.selected ? @"checkmark.circle.fill" : @"circle"];
-    cell.checkView.tintColor = item.selected ? UIColor.systemBlueColor : UIColor.tertiaryLabelColor;
+    UIListContentConfiguration *content = [UIListContentConfiguration subtitleCellConfiguration];
+    content.text = item.name;
+    BOOL known = item.cacheKnown && (item.crashLogs || item.tempKnown);
+    NSString *size = known ? wq_size_text(item.bytes) : [NSString stringWithFormat:@"%@ measured · size incomplete", wq_size_text(item.bytes)];
+    content.secondaryText = [NSString stringWithFormat:@"%@\n%@%@", item.bundleID ?: @"CrashReporter", size, item.limited ? @" · access limited" : @""];
+    content.textProperties.font = wq_font(UIFontTextStyleBody, self.traitCollection);
+    content.secondaryTextProperties.font = wq_font(UIFontTextStyleFootnote, self.traitCollection);
+    content.textProperties.numberOfLines = 0;
+    content.secondaryTextProperties.numberOfLines = 0;
+    content.directionalLayoutMargins = NSDirectionalEdgeInsetsMake(12, 16, 12, 16);
+    content.image = wq_app_icon(item.bundleID) ?: [UIImage systemImageNamed:@"doc.text"];
+    content.imageProperties.maximumSize = CGSizeMake(40, 40);
+    cell.contentConfiguration = content;
+    cell.accessoryType = item.selected ? UITableViewCellAccessoryCheckmark : UITableViewCellAccessoryNone;
+    cell.isAccessibilityElement = YES;
+    cell.accessibilityLabel = [NSString stringWithFormat:@"%@, %@", item.name, content.secondaryText];
+    cell.accessibilityValue = item.limited ? @"Access limited" : item.selected ? @"Selected" : @"Not selected";
+    cell.accessibilityTraits = UIAccessibilityTraitButton | (item.selected ? UIAccessibilityTraitSelected : 0);
+    cell.accessibilityIdentifier = [@"cache." stringByAppendingString:item.bundleID ?: @"crash-reports"];
     return cell;
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
 {
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
-    if (indexPath.section == 0 || _scanning || _cleaning) return;
+    if (_scanning || _cleaning) return;
     WQCacheItem *item = self.visibleItems[(NSUInteger)indexPath.row];
     if (item.limited) {
-        wq_alert(self, @"Not cleanable",
-                 @"This row has incomplete access or identity information. Scan again while the app is closed, pull to refresh to try again.");
+        wq_alert(self, @"Not cleanable", @"Access or identity is incomplete. Close the app and refresh before retrying.");
         return;
     }
     item.selected = !item.selected;
-    [tableView reloadRowsAtIndexPaths:@[indexPath, [NSIndexPath indexPathForRow:0 inSection:0]]
-                     withRowAnimation:UITableViewRowAnimationNone];
-    [self updateButtons];
+    [self updatePresentation];
 }
 
 - (void)stopClean
@@ -982,13 +811,16 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
     if (!selected.count) return;
     NSArray<WQCacheItem *> *confirmed = [selected copy];
     NSUInteger generation = _scanGeneration;
-    NSString *msg = WQLocalizedFormat(@"%@, about %@? This cannot be undone. Close the selected apps first; you can stop between items.", WQCacheConfirmationScope(confirmed), wq_size_text(sel));
+    BOOL includesApps = NO;
+    WQCacheSelectionCategories(confirmed, &includesApps, NULL, NULL);
+    NSString *msg = [NSString stringWithFormat:@"%@ (about %@). This cannot be undone. No backup is created.%@ Stop cancels remaining work; removed files stay deleted.",
+        WQCacheConfirmationScope(confirmed), wq_size_text(sel), includesApps ? @" Offline downloads may be lost. Close the selected apps first." : @""];
     UIAlertController *alert = wq_alert_controller(@"Clean caches?", msg, UIAlertControllerStyleAlert);
     [alert addAction:wq_alert_action(@"Cancel", UIAlertActionStyleCancel, nil)];
     [alert addAction:wq_alert_action(@"Clean", UIAlertActionStyleDestructive, ^(UIAlertAction *__unused a) {
         [self dismissViewControllerAnimated:YES completion:^{ [self cleanItems:confirmed generation:generation]; }];
     })];
-    [self presentViewController:alert animated:YES completion:nil];
+    wq_present_confirmation(self, alert);
 }
 
 - (void)cleanItems:(NSArray<WQCacheItem *> *)selected generation:(NSUInteger)generation
@@ -1001,6 +833,7 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
     }
     WQScanCancellation *cancellation = [WQScanCancellation new];
     if (!wq_begin_mutation(self)) return;
+    _result = nil;
     _cleanCancellation = cancellation;
     _cleaning = YES;
     [self updateButtons];
@@ -1024,14 +857,13 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
                 wq_end_mutation();
                 self->_cleaning = NO;
                 self->_cleanCancellation = nil;
-                self->_scanLimited = YES;
+
                 self->_cleanRequiresRescan = YES;
                 self->_status = nil;
                 BOOL rescanned = [self rescanAfterClean:NO];
                 self->_result = WQLocalizedFormat(@"Clean cancelled: %@. Scan again before retrying.", validationFailure);
                 if (rescanned) return;
-                [self.tableView reloadData];
-                [self updateButtons];
+                [self updatePresentation];
             });
             return;
         }
@@ -1052,8 +884,8 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
                     break;
                 }
                 if (!wq_purge_contents_validated(record.path, &freed, cancellation, ^BOOL { return WQCacheValidateItem(item, NULL); })) {
-                    allOk = NO;
                     if (cancellation.isCancelled) { cancelled = YES; break; }
+                    allOk = NO;
                     validationFailure = [NSString stringWithFormat:@"%@ could not be fully cleaned because access or data changed", item.name];
                     break;
                 }
@@ -1065,27 +897,29 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
             wq_end_mutation();
             self->_cleaning = NO;
             self->_cleanCancellation = nil;
+            [self updateButtons];
             if (cancelled) {
                 self->_status = nil;
                 [self rescanAfterClean:YES];
-                self->_result = WQLocalizedFormat(@"Stopped. Freed %@.%@", wq_size_text(freed),
+                self->_result = WQLocalizedFormat(@"Stopped. Freed about %@.%@", wq_size_text(freed),
                                  allOk ? @"" : WQLocalized(@" Some items could not be removed (access denied or data changed)."));
+                [self updatePresentation];
                 return;
             }
             if (validationFailure) {
-                self->_scanLimited = YES;
+
                 self->_cleanRequiresRescan = YES;
                 self->_status = nil;
                 BOOL rescanned = [self rescanAfterClean:NO];
                 self->_result = WQLocalizedFormat(@"Clean stopped: %@. Scan again before retrying.", validationFailure);
                 if (rescanned) return;
-                [self.tableView reloadData];
-                [self updateButtons];
+                [self updatePresentation];
             } else {
                 self->_status = nil;
                 [self rescanAfterClean:YES];
-                self->_result = WQLocalizedFormat(@"Freed %@.%@", wq_size_text(freed),
+                self->_result = WQLocalizedFormat(@"Freed about %@.%@", wq_size_text(freed),
                                  allOk ? @"" : WQLocalized(@" Some items could not be removed (access denied or data changed)."));
+                [self updatePresentation];
             }
         });
     });

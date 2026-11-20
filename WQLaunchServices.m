@@ -1079,6 +1079,9 @@ NSDictionary<NSString *, NSString *> *wq_ls_group_ids_from_store(NSData *data)
         const uint8_t *hit = memmem(cursor, (size_t)(end - cursor), needle, sizeof(needle) - 1);
         if (!hit) break;
         cursor = hit + sizeof(needle) - 1;
+        // A malformed store may begin with the path itself. Do not form a
+        // pointer before the input while searching for a preceding header.
+        if ((size_t)(hit - bytes) < sizeof(magic) - 1) continue;
         // The nearest plist header before the path (within 16 KB).
         const uint8_t *from = hit - MIN((size_t)(hit - bytes), (size_t)16384), *start = NULL;
         for (const uint8_t *p = hit - (sizeof(magic) - 1); p >= from; p--) {
@@ -1380,13 +1383,6 @@ NSString *wq_group_id_for_container(NSString *path)
         wq_load_ls_names_locked();
         NSString *ident = gLSGroupIDs[key];
         return [ident isKindOfClass:NSString.class] ? ident : nil;
-    }
-}
-
-NSArray<NSString *> *wq_ls_bundle_containers(void)
-{
-    @synchronized (wq_ls_lock()) {
-        return [wq_bundle_containers_locked().allKeys sortedArrayUsingSelector:@selector(compare:)];
     }
 }
 

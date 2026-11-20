@@ -33,7 +33,6 @@ static BOOL gTasksPaused;
     NSDictionary *saved = WQScanJournalLoad([@"task:" stringByAppendingString:name]);
     task->_identifier = [saved[@"identifier"] isKindOfClass:NSString.class] ? saved[@"identifier"] : NSUUID.UUID.UUIDString;
     task->_result = nil;
-    task->_finishedAt = nil;
     task->_userPaused = [saved[@"userPaused"] isEqual:@YES];
     task->_interrupted = [saved[@"unfinished"] isEqual:@YES] && !task->_userPaused;
     task->_status = task->_userPaused ? @"Scan paused" : @"";
@@ -120,7 +119,6 @@ static BOOL gTasksPaused;
     BOOL failed = [result[@"complete"] isEqual:@NO];
     if (!failed || !_result) {
         _result = [result copy];
-        _finishedAt = NSDate.date;
     }
     _running = NO;
     _interrupted = failed;

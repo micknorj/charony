@@ -22,7 +22,7 @@ The intended physical validation target is an iPhone 11 Pro on iOS 27.2.1. The m
 ## Apps
 
 - Show accessible detected third-party and Apple apps; hide inaccessible apps
-- Present icon, name, bundle ID and total data size in compact native rows; keep the upstream symbol fallback when an icon is unavailable
+- Present icon, name, bundle ID and total data size in comfortable, readable native rows; keep the upstream symbol fallback when an icon is unavailable
 - Keep search by name/bundle ID and relevant Apple/other and installed/offloaded filters where identity is reliable
 - Clear only one explicitly selected app container's `Documents`, `Library` and `tmp` contents, using retained validated purge logic
 - Retain container/part roots and metadata, revalidate targets and check postconditions; report failures
@@ -42,7 +42,8 @@ The intended physical validation target is an iPhone 11 Pro on iOS 27.2.1. The m
 ## Scanning and local state
 
 - Keep manual refresh, progress, pause/resume, foreground/background handling and interruption recovery
-- Initial scanning on first opening a tab is permitted; remove automatic timed rescans
+- Opening a tab does not start a scan; show "Refresh to update" until the user refreshes
+- Refresh starts a fresh scan; Resume retains interrupted-task identity and checkpoints; no timed rescans
 - Keep in-memory results during the process, with only minimal local task/measurement/inode checkpoints for unfinished work
 - Do not persist completed scan results, historical sizes, completed cache rows or discovery/activity history
 - Remove completed recovery state when safe, sanitize legacy state before workers begin and surface cleanup failure without recording logs
@@ -65,7 +66,14 @@ The intended physical validation target is an iPhone 11 Pro on iOS 27.2.1. The m
 - Bottom tabs: **Apps** and **Caches**, with native bottom-right contextual **Search**
 - Search the selected tab only; preserve its controller, query/selection context and scan state when entering/leaving Search
 - Verify `UISearchTab` behavior across supported versions; do not substitute an unverified mockup
-- Compact accessible rows, native confirmations and current failure messages
+- Small top-left Apps/Caches title, native Back on any secondary screen, top-right Refresh icon and separate ellipsis filter menu
+- Comfortable native rows containing icon, name, bundle ID and storage size; keep selection state accessible to VoiceOver
+- Center "Refresh to update" before loading; distinguish loading, genuine empty results, no search matches, unavailable access and errors
+- Remove large counts/storage summaries, last-scanned banners, repeated refresh instructions and descriptive list footers
+- Cap application-controlled typography at normal iOS system size (Large), allowing smaller system sizes; keep VoiceOver and accessibility labels/traits
+- Native confirmations with short permanent-deletion, exact scope, no-backup and relevant content-loss warnings; necessary progress/cancellation/errors remain
+- Dismiss active Search and restore the original controller before presenting a confirmation, preserving query, selection and captured targets
+- Native bottom tabs/Search on both supported device families; use UIKit layout traits rather than drawing custom bars/materials
 - No Settings page or gear icon
 - Show Reset Access Cache only for a detected recoverable access failure
 - Circular Charon-inspired moon icon with subtle surface detail and no lettering
@@ -104,6 +112,8 @@ Maintain focused positive and negative coverage for:
 - Logging/network removal, contextual search and navigation
 
 GitHub Actions must run relevant native macOS tests, strict Objective-C iOS compilation/linking, disposable Simulator fixtures, source/binary privacy audits, IPA/package/bundle metadata validation, App Group/signature validation and asset/icon compilation. Check actual pinned Xcode/SDK/runtime availability and fail on missing tooling. Do not embed signing credentials in source or artifacts. An unrun/skipped check remains unverified.
+
+Screenshot galleries, exhaustive capture hosts and screenshot-only CI jobs are outside scope. Preserve their useful functional and safety assertions in required native tests; do not retain generated screenshots or ZIPs in source control. Layered artwork is a separate task.
 
 Keep [TESTING.md](TESTING.md) accurate with commands, platform, outcomes, evidence and unresolved requirements. Simulator fixtures cannot validate real sandbox tokens, supported protected-app access or final sideloaded signing. Begin physical checks read-only; destructive validation must use an expendable app with disposable data, preferably on a spare supported device. If that is unavailable, keep destructive-device behavior unverified. Require independent destructive-code review before primary-phone use.
 

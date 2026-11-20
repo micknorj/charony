@@ -24,7 +24,8 @@ int main(void)
 {
     @autoreleasepool {
         require(WQAppsSupportBundleIDValid(@"com.example.app") && WQAppsSupportBundleIDValid(@"com.example-app_1"), @"valid bundle grammar preserved");
-        for (NSString *invalid in @[@"", @"nodot", @"com/example", @"com..example", @".com.example",
+        require(WQAppsSupportBundleIDValid(@"pinterest") && WQAppsSupportBundleIDValid(@"ifengNews"), @"real single-word identifiers are accepted");
+        for (NSString *invalid in @[@"", @"ab", @"...", @"com/example", @"com..example", @".com.example",
                                     @"com.example.", @"com example.app", @"../escape"])
             require(!WQAppsSupportBundleIDValid(invalid), @"invalid bundle grammar refused");
         NSFileManager *fm = NSFileManager.defaultManager;
@@ -68,6 +69,12 @@ int main(void)
                 require(remaining != nil && remaining.count == 0, @"part roots preserved empty");
             }
             require(CHClearAppData(container, @"com.example.fixture", st.st_dev, st.st_ino, &freed, &error), @"repeat clear is idempotent");
+            NSString *oneWordFile = [container stringByAppendingPathComponent:@"Documents/one-word-data"];
+            put(oneWordFile);
+            require([@{@"MCMMetadataIdentifier": @"pinterest"} writeToFile:metadata atomically:YES], @"single-word identity fixture");
+            require(CHClearAppData(container, @"pinterest", st.st_dev, st.st_ino, &freed, &error), @"single-word app clears through the real identity policy");
+            require(!exists(oneWordFile) && exists(rootSentinel) && exists(unrelated) && exists(metadata), @"single-word clear preserves roots, metadata and unrelated app");
+            require([@{@"MCMMetadataIdentifier": @"com.example.fixture"} writeToFile:metadata atomically:YES], @"restore fixture identity");
             put([container stringByAppendingPathComponent:@"Documents/again"]);
             __block BOOL swapped = NO;
             wq_test_tree_hook = ^(NSString *stage, NSString *path) {

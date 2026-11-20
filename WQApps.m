@@ -14,7 +14,6 @@
 #import "WQCacheSafety.h"
 #import "CHAppData.h"
 #import <errno.h>
-#import <sys/mount.h>
 #import <sys/stat.h>
 
 #pragma mark - Apps manager
@@ -51,9 +50,10 @@
     NSString *_status;
     float _fraction;   // progress bar under the status; negative hides it
     BOOL _busy;
-    WQScanCancellation *_scanCancellation;
+
     NSUInteger _scanGeneration;
     BOOL _scanning;
+    BOOL _clearResultDeliveryScheduled;
     NSString *_pendingClearTitle, *_pendingClearMessage;
     NSArray<NSString *> *_indexTitles;
     NSDictionary<NSString *, NSNumber *> *_indexRows;
@@ -65,15 +65,14 @@ typedef NS_ENUM(NSInteger, WQInstallState) { WQInstallUnknown = 0, WQInstallInst
 
 // An offloaded app keeps a placeholder bundle (Info.plist and icons) but its
 // executable is removed. The bundle path comes from the LaunchServices
-static WQInstallState wq_app_install_state(NSString *bundleID, NSString **why)
+static WQInstallState wq_app_install_state(NSString *bundleID)
 {
     NSString *path = bundleID.length ? wq_bundle_path_for_id(bundleID) : nil;
-    if (!path.length) { *why = @"no bundle path: not in the app database"; return WQInstallUnknown; }
+    if (!path.length) return WQInstallUnknown;
     // Built-in apps live on the read-only system volume, which this app can't
     // read; they can't be offloaded (removable Apple apps live in bundle
     // containers like everyone else's).
     if ([path hasPrefix:@"/Applications/"] || [path hasPrefix:@"/System/"]) {
-        *why = @"built-in: system volume";
         return WQInstallInstalled;
     }
     // Checking whether a path exists works even where reading is refused
@@ -83,46 +82,29 @@ static WQInstallState wq_app_install_state(NSString *bundleID, NSString **why)
     struct stat guessed;
     NSString *guess = [path stringByAppendingPathComponent:path.lastPathComponent.stringByDeletingPathExtension];
     if (lstat(guess.fileSystemRepresentation, &guessed) == 0 && S_ISREG(guessed.st_mode)) {
-        *why = @"installed: executable present";
         return WQInstallInstalled;
     }
     NSString *plistPath = [path stringByAppendingPathComponent:@"Info.plist"];
     // Installed apps' bundles refuse reading (iOS 26 and 27.0.1), while an
-    // offloaded app's placeholder bundle can be read. A plain read first (no
-    NSError *plainError = nil;
-    NSData *data = [NSData dataWithContentsOfFile:plistPath options:0 error:&plainError];
-    int plainErrno = (int)[plainError.userInfo[NSUnderlyingErrorKey] code];
+    // offloaded app's placeholder bundle can be read. Try a plain read first.
+    NSData *data = [NSData dataWithContentsOfFile:plistPath];
     static NSInteger tokenAttempts, tokenSuccesses;
     BOOL tryToken = NO;
     @synchronized ([WQAppItem class]) { tryToken = !data && (tokenSuccesses > 0 || tokenAttempts < 3); }
-    NSString *readError = nil;
     if (tryToken) {
-        data = (wq_grant(path.stringByDeletingLastPathComponent) || wq_grant(path)) ? wq_read(plistPath, 4 * 1024 * 1024, &readError) : nil;
+        data = (wq_grant(path.stringByDeletingLastPathComponent) || wq_grant(path)) ? wq_read(plistPath, 4 * 1024 * 1024, NULL) : nil;
         @synchronized ([WQAppItem class]) { tokenAttempts++; if (data) tokenSuccesses++; }
     }
     id info = data ? [NSPropertyListSerialization propertyListWithData:data options:0 format:NULL error:nil] : nil;
-    if (![info isKindOfClass:NSDictionary.class]) {
-        struct stat st;
-        BOOL bundleThere = lstat(path.fileSystemRepresentation, &st) == 0;
-        BOOL denied = plainErrno == EPERM || plainErrno == EACCES || plainError.code == NSFileReadNoPermissionError;
-        if (!data && bundleThere && denied) {
-            *why = [NSString stringWithFormat:@"refused: %@ can't be read", path.lastPathComponent];
-            return WQInstallUnknown;
-        }
-        *why = [NSString stringWithFormat:@"%@: %@ (%@)", data ? @"Info.plist not a dictionary" : @"Info.plist unreadable",
-                plistPath, data ? @"bad plist" : (readError ?: plainError.localizedDescription ?: @"no reason")];
-        if (!data && !bundleThere) *why = [*why stringByAppendingString:@", bundle not visible"];
-        return WQInstallUnknown;
-    }
+    if (![info isKindOfClass:NSDictionary.class]) return WQInstallUnknown;
     NSString *executable = [info[@"CFBundleExecutable"] isKindOfClass:NSString.class] ? info[@"CFBundleExecutable"] : nil;
-    if (!executable.length || [executable containsString:@"/"]) { *why = @"no CFBundleExecutable: in Info.plist"; return WQInstallUnknown; }
+    if (!executable.length || [executable containsString:@"/"]) return WQInstallUnknown;
     NSString *exePath = [path stringByAppendingPathComponent:executable];
     struct stat st;
-    if (lstat(exePath.fileSystemRepresentation, &st) == 0) { *why = @"installed: executable present"; return WQInstallInstalled; }
+    if (lstat(exePath.fileSystemRepresentation, &st) == 0) return WQInstallInstalled;
     int err = errno;
-    if (wq_stat(exePath, &st)) { *why = @"installed: executable present"; return WQInstallInstalled; }
-    if (err == ENOENT) { *why = [NSString stringWithFormat:@"offloaded: %@ missing from %@", executable, path]; return WQInstallOffloaded; }
-    *why = [NSString stringWithFormat:@"executable unchecked: %@ (%s)", exePath, strerror(err)];
+    if (wq_stat(exePath, &st)) return WQInstallInstalled;
+    if (err == ENOENT) return WQInstallOffloaded;
     return WQInstallUnknown;
 }
 
@@ -185,23 +167,42 @@ static BOOL wq_dir_size_cancellable(NSString *dir, NSString *taskID, WQScanCance
     }
     _scanning = _scanTask.running;
     _fraction = _scanning && !_scanTask.paused ? _scanTask.fraction : -1;
+    NSString *note = [result[@"note"] isKindOfClass:NSString.class] ? result[@"note"] : nil;
+    if (!note.length) note = nil;
     _status = _scanning ? (_scanTask.paused ? WQLocalized(@"Scan paused") :
         (_scanTask.status.length ? WQLocalized(_scanTask.status) : WQLocalized(@"Scan queued; previous results kept"))) :
-        (_scanTask.status.length ? WQLocalized(_scanTask.status) : ([result[@"note"] isKindOfClass:NSString.class] ? result[@"note"] : nil));
-    if (_scanTask.finishedAt) {
-        NSString *date = [NSDateFormatter localizedStringFromDate:_scanTask.finishedAt dateStyle:NSDateFormatterShortStyle timeStyle:NSDateFormatterShortStyle];
-        self.navigationItem.prompt = WQLocalizedFormat(@"Last scanned %@ · Pull to refresh", date);
-    }
+        (_scanTask.status.length ? WQLocalized(_scanTask.status) : note);
     _busy = _scanning;
-    if (_scanTask.persistenceFailed) self.navigationItem.prompt = WQLocalized(@"Could not save scan state. Keep charony open.");
     if (!_scanning) [self.refreshControl endRefreshing];
-    [self.tableView reloadData];
-    NSMutableArray *buttons = [NSMutableArray arrayWithObject:[self sortButton]];
-    if (_scanTask.running || _scanTask.userPaused) {
-        [buttons insertObject:[[UIBarButtonItem alloc] initWithTitle:WQLocalized(_scanTask.running ? @"Pause Scan" : @"Resume Scan")
-            style:UIBarButtonItemStylePlain target:self action:@selector(toggleScan)] atIndex:0];
+    [self updatePresentation];
+}
+
+- (void)updatePresentation
+{
+    NSString *message = [self statusText];
+    if (!self.visibleApps.count && !message.length) {
+        message = !_shownScanResult ? @"Refresh to update" :
+            ((_query.length || _filter > 0) ? @"No results" : @"No accessible apps");
     }
-    self.navigationItem.rightBarButtonItems = buttons;
+    wq_empty_message(self.tableView, self.visibleApps.count ? nil : message, _scanning && !_scanTask.paused ? _fraction : -1);
+    [self.tableView reloadData];
+    [self updateButtons];
+}
+
+- (NSString *)statusText
+{
+    NSString *status = _status.length ? _status : (_scanTask.interrupted ? @"Scan interrupted. Resume to continue." : nil);
+    if (_scanTask.persistenceFailed) return status.length ? [status stringByAppendingString:@"\nCould not save scan state. Keep charony open."] : @"Could not save scan state. Keep charony open.";
+    return status;
+}
+
+- (void)updateButtons
+{
+    UIBarButtonItem *menu = [self sortButton];
+    menu.accessibilityLabel = @"Filters and scan controls";
+    menu.accessibilityIdentifier = @"filters";
+    menu.enabled = !_busy || _scanning;
+    self.navigationItem.rightBarButtonItems = @[menu, wq_refresh_button(self, @selector(userRefresh), !_busy || _scanning)];
 }
 
 - (void)toggleScan
@@ -219,12 +220,15 @@ static BOOL wq_dir_size_cancellable(NSString *dir, NSString *taskID, WQScanCance
 {
     [super viewDidLoad];
     _fraction = -1;
-    self.title = WQLocalizedNullable(@"Apps");
+    wq_prepare_list(self, @"Apps");
     UISearchController *search = [[UISearchController alloc] initWithSearchResultsController:nil];
     search.searchResultsUpdater = self;
     search.obscuresBackgroundDuringPresentation = NO;
     search.searchBar.placeholder = WQLocalizedNullable(@"Search apps");
-    self.navigationItem.rightBarButtonItem = [self sortButton];
+    search.searchBar.maximumContentSizeCategory = UIContentSizeCategoryLarge;
+    search.searchBar.searchTextField.maximumContentSizeCategory = UIContentSizeCategoryLarge;
+    search.searchBar.searchTextField.adjustsFontForContentSizeCategory = YES;
+    search.searchBar.searchTextField.font = wq_font(UIFontTextStyleBody, self.traitCollection);
     _contextSearchController = search;
     self.definesPresentationContext = YES;
     self.refreshControl = [UIRefreshControl new];
@@ -232,11 +236,15 @@ static BOOL wq_dir_size_cancellable(NSString *dir, NSString *taskID, WQScanCance
     _scanTask = [WQScanTask taskNamed:@"apps"];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(scanTaskChanged:) name:WQScanTaskChangedNotification object:_scanTask];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(applicationDidBecomeActive:) name:UIApplicationDidBecomeActiveNotification object:nil];
+    [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(contentSizeChanged:) name:UIContentSizeCategoryDidChangeNotification object:nil];
     [self scanTaskChanged:nil];
-    if (!_scanTask.running && !_scanTask.userPaused && (!_scanTask.result || _scanTask.interrupted)) {
-        _resumeScan = _scanTask.interrupted;
-        [self scan];
-    }
+}
+
+- (void)contentSizeChanged:(NSNotification *)notification
+{
+    [self updatePresentation];
+    _contextSearchController.searchBar.searchTextField.font = wq_font(UIFontTextStyleBody, self.traitCollection);
+    ((UILabel *)self.navigationItem.leftBarButtonItem.customView).font = wq_font(UIFontTextStyleHeadline, self.traitCollection);
 }
 
 // Pull to refresh: rescan the containers instead of reusing the shared scan,
@@ -259,10 +267,8 @@ static BOOL wq_dir_size_cancellable(NSString *dir, NSString *taskID, WQScanCance
     _busy = busy;
     _status = status;
     _fraction = -1;
-    [self.tableView reloadData];
+    [self updatePresentation];
 }
-
-// Watchdog for the app scan: each step records what it's doing; a timer logs
 - (void)scan
 {
     if (_busy && !_scanning) { [self.refreshControl endRefreshing]; return; }
@@ -271,7 +277,7 @@ static BOOL wq_dir_size_cancellable(NSString *dir, NSString *taskID, WQScanCance
     _resumeScan = NO;
     if (!taskGeneration) return;
     NSString *taskID = _scanTask.identifier;
-    _scanCancellation = cancellation;
+
     NSUInteger generation = ++_scanGeneration;
     _scanning = YES;
     [self setBusy:YES status:@"Finding apps…"];
@@ -305,8 +311,7 @@ static BOOL wq_dir_size_cancellable(NSString *dir, NSString *taskID, WQScanCance
             app.containerDevice = identity.st_dev;
             app.containerInode = identity.st_ino;
             (void)wq_app_icon(bundle);
-            NSString *why = nil;
-            app.installState = wq_app_install_state(bundle, &why);
+            app.installState = wq_app_install_state(bundle);
             unsigned long long bytes = 0;
             BOOL complete = NO;
             if (!wq_dir_size_cancellable(container, taskID, cancellation, &bytes, &complete)) return;
@@ -319,7 +324,7 @@ static BOOL wq_dir_size_cancellable(NSString *dir, NSString *taskID, WQScanCance
             });
         }
         NSString *note = !wq_app_group() ? @"An App Group is required. Re-sign charony with a tool that preserves its App Group entitlement." :
-            !containers ? @"App discovery failed or was cancelled. Pull to refresh to try again." : nil;
+            !containers ? @"App discovery failed or was cancelled. Refresh to retry." : nil;
         dispatch_async(dispatch_get_main_queue(), ^{
             if (generation != self->_scanGeneration || cancellation.isCancelled) return;
             NSMutableDictionary *snapshot = [[self snapshotRows:apps note:note] mutableCopy];
@@ -426,57 +431,47 @@ static BOOL wq_dir_size_cancellable(NSString *dir, NSString *taskID, WQScanCance
             [filters addObject:f];
         }
         UIMenu *show = [UIMenu menuWithTitle:WQLocalizedNullable(@"Show") image:nil identifier:nil options:UIMenuOptionsDisplayInline children:filters];
-        completion(@[sort, show]);
+        NSMutableArray<UIMenuElement *> *sections = [NSMutableArray arrayWithObjects:sort, show, nil];
+        if (strongSelf && (strongSelf->_scanTask.running || strongSelf->_scanTask.userPaused || strongSelf->_scanTask.interrupted)) {
+            UIAction *scan = [UIAction actionWithTitle:strongSelf->_scanTask.running ? @"Pause Scan" : @"Resume Scan" image:nil identifier:nil handler:^(UIAction *__unused action) { [weakSelf toggleScan]; }];
+            [sections addObject:scan];
+        }
+        completion(sections);
     }];
-    return [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"line.3.horizontal.decrease.circle"]
+    return [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"ellipsis"]
                                              menu:[UIMenu menuWithChildren:@[items]]];
 }
 
 - (void)resortApps
 {
     [self rebuildVisibleApps];
-    [self.tableView reloadData];
+    [self updatePresentation];
     [self.tableView reloadSectionIndexTitles];
 }
 
-// Long-press: copy the bundle ID or container path, open the data folder.
 - (void)updateSearchResultsForSearchController:(UISearchController *)searchController
 {
     _query = [searchController.searchBar.text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet];
     [self rebuildVisibleApps];
-    [self.tableView reloadData];
+    [self updatePresentation];
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
 {
-    return (_busy && !_apps.count) ? 1 : (NSInteger)self.visibleApps.count;
+    // Progress belongs to the section header. Every advertised row must have
+    // an app model, including the first scan and a refresh of an empty list.
+    return (NSInteger)self.visibleApps.count;
 }
 
 - (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section
 {
-    if (!_status || _fraction < 0) return nil;   // plain title header
+    (void)section;
+    NSString *status = [self statusText];
+    if (!self.visibleApps.count || !status.length) return nil;
     WQProgressHeaderView *header = [tableView dequeueReusableHeaderFooterViewWithIdentifier:@"progress"]
         ?: [[WQProgressHeaderView alloc] initWithReuseIdentifier:@"progress"];
-    [header setText:_status fraction:_fraction];
+    [header setText:status fraction:_fraction];
     return header;
-}
-
-- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section
-{
-    // The progress header draws the status itself; a title here would be drawn
-    // into it a second time (overlapping text).
-    if (_status && _fraction >= 0) return nil;
-    if (_status) return _status;
-    unsigned long long total = 0;
-    for (WQAppItem *a in _apps) total += a.bytes;
-    if (_query.length || _filter > 0)
-        return WQLocalizedFormat(@"%lu of %lu apps", (unsigned long)self.visibleApps.count, (unsigned long)_apps.count);
-    return WQLocalizedFormat(@"%lu apps · %@ of app data", (unsigned long)_apps.count, wq_size_text(total));
-}
-
-- (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section
-{
-    return @"Tap an app to confirm permanent clearing. Close it first. Safari and Messages cleanup is best effort.";
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
@@ -485,10 +480,15 @@ static BOOL wq_dir_size_cancellable(NSString *dir, NSString *taskID, WQScanCance
     WQAppItem *app = self.visibleApps[(NSUInteger)indexPath.row];
     UIListContentConfiguration *content = [UIListContentConfiguration subtitleCellConfiguration];
     content.text = app.name;
-    content.secondaryText = [NSString stringWithFormat:@"%@ · %@%@", app.bundleID, app.sizeKnown ? wq_size_text(app.bytes) : @"size incomplete", app.installState == WQInstallOffloaded ? @" · offloaded" : @""];
-    content.secondaryTextProperties.numberOfLines = 2;
+    NSString *size = app.sizeKnown ? wq_size_text(app.bytes) : [NSString stringWithFormat:@"%@ measured · size incomplete", wq_size_text(app.bytes)];
+    content.secondaryText = [NSString stringWithFormat:@"%@\n%@%@", app.bundleID, size, app.installState == WQInstallOffloaded ? @" · offloaded" : @""];
+    content.textProperties.font = wq_font(UIFontTextStyleBody, self.traitCollection);
+    content.secondaryTextProperties.font = wq_font(UIFontTextStyleFootnote, self.traitCollection);
+    content.textProperties.numberOfLines = 0;
+    content.secondaryTextProperties.numberOfLines = 0;
+    content.directionalLayoutMargins = NSDirectionalEdgeInsetsMake(12, 16, 12, 16);
     content.image = wq_app_icon(app.bundleID);
-    content.imageProperties.maximumSize = CGSizeMake(32, 32);
+    content.imageProperties.maximumSize = CGSizeMake(40, 40);
     cell.contentConfiguration = content;
     cell.accessibilityIdentifier = [@"app." stringByAppendingString:app.bundleID];
     return cell;
@@ -497,14 +497,15 @@ static BOOL wq_dir_size_cancellable(NSString *dir, NSString *taskID, WQScanCance
 {
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
     if (_busy || _scanTask.userPaused) return;
+    if (_pendingClearTitle) { [self presentPendingClearResult]; return; }
     WQAppItem *app = self.visibleApps[(NSUInteger)indexPath.row];
     UIAlertController *alert = wq_alert_controller([NSString stringWithFormat:@"Clear %@?", app.name],
-        @"Permanently empties this app's Documents, Library and tmp. Logins, settings and offline content are lost. No backup is created. Close the app first. Safari and Messages cleanup is best effort and may leave data in other containers.", UIAlertControllerStyleAlert);
+        @"Permanently empties Documents, Library and tmp. Logins, settings and offline content will be lost. No backup is created. Close the app first. Safari and Messages cleanup is best effort; other data may remain.", UIAlertControllerStyleAlert);
     [alert addAction:wq_alert_action(@"Cancel", UIAlertActionStyleCancel, nil)];
     [alert addAction:wq_alert_action(@"Clear Data", UIAlertActionStyleDestructive, ^(UIAlertAction *__unused action) {
         [self dismissViewControllerAnimated:YES completion:^{ [self clear:app]; }];
     })];
-    [self presentViewController:alert animated:YES completion:nil];
+    wq_present_confirmation(self, alert);
 }
 - (void)clear:(WQAppItem *)app
 {
@@ -527,9 +528,28 @@ static BOOL wq_dir_size_cancellable(NSString *dir, NSString *taskID, WQScanCance
 }
 - (void)presentPendingClearResult
 {
-    if (!_pendingClearTitle || !self.view.window || self.presentedViewController ||
+    if (!_pendingClearTitle || !self.view.window ||
         self.navigationController.topViewController != self ||
         self.view.window.windowScene.activationState != UISceneActivationStateForegroundActive) return;
+    BOOL modal = NO;
+    for (UIViewController *host = self; host; host = host.parentViewController)
+        if (host.presentedViewController) { modal = YES; break; }
+    if (modal) {
+        // UIAlert dismissal does not reliably call the presenting screen's
+        // viewDidAppear. Retain the outcome and retry only while this screen
+        // is visible/active; navigation/foreground callbacks resume delivery.
+        if (!_clearResultDeliveryScheduled) {
+            _clearResultDeliveryScheduled = YES;
+            __weak WQAppsViewController *weakSelf = self;
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 250 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{
+                WQAppsViewController *controller = weakSelf;
+                if (!controller) return;
+                controller->_clearResultDeliveryScheduled = NO;
+                [controller presentPendingClearResult];
+            });
+        }
+        return;
+    }
     wq_alert(self, _pendingClearTitle, _pendingClearMessage);
     _pendingClearTitle = nil;
     _pendingClearMessage = nil;

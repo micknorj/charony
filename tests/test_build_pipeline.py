@@ -56,6 +56,8 @@ class BuildPipelineTests(unittest.TestCase):
         self.assertIn('-miphoneos-version-min=26.0', clang)
         self.assertIn('-Werror', clang)
         self.assertIn('CHAppData.m', clang)
+        extraction = next(event for event in self.events() if event[:2] == ['codesign', '-d'])
+        self.assertEqual(extraction[2:5], ['--entitlements', '-', '--xml'])
         self.assertFalse(list(self.project.glob('.charony-build.*')))
         self.assertTrue(any('unpacked' in event[-1] for event in self.events() if event[0] == 'codesign' and '--verify' in event))
 

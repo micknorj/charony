@@ -18,7 +18,7 @@ jobs:
     runs-on: macos-26-intel
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1, Node 24
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -35,7 +35,7 @@ jobs:
           bash "$BASELINE/source/tests/run_all_tests.sh" 2>&1 | tee .ci-results/upstream-baseline.log
       - name: Retain baseline diagnostics even on failure
         if: ${{ always() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2, Node 24
         with:
           name: upstream-baseline-diagnostics
           include-hidden-files: true
@@ -49,7 +49,7 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1, Node 24
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -67,27 +67,33 @@ jobs:
         env:
           SIMULATOR_RUNTIME: ${{ steps.toolchain.outputs.simulator_runtime }}
           SIMULATOR_DEVICE_TYPE: ${{ steps.toolchain.outputs.simulator_device_type }}
+          SIMULATOR_IPAD_DEVICE_TYPE: ${{ steps.toolchain.outputs.simulator_ipad_device_type }}
         run: |
           set -euo pipefail
-          DEVICE=$(xcrun simctl create charony-fixtures "$SIMULATOR_DEVICE_TYPE" "$SIMULATOR_RUNTIME")
-          trap 'xcrun simctl delete "$DEVICE"' EXIT
-          xcrun simctl boot "$DEVICE"
-          xcrun simctl bootstatus "$DEVICE" -b
-          WQ_SIMULATOR_UDID="$DEVICE" bash tests/run_scan_ui_tests.sh 2>&1 | tee .ci-results/simulator.log
+          DEVICE=""
+          trap 'if [[ -n "$DEVICE" ]]; then xcrun simctl delete "$DEVICE"; fi' EXIT
+          for TYPE in "$SIMULATOR_DEVICE_TYPE" "$SIMULATOR_IPAD_DEVICE_TYPE"; do
+            DEVICE=$(xcrun simctl create charony-fixtures "$TYPE" "$SIMULATOR_RUNTIME")
+            xcrun simctl boot "$DEVICE"
+            xcrun simctl bootstatus "$DEVICE" -b
+            WQ_SIMULATOR_UDID="$DEVICE" bash tests/run_scan_ui_tests.sh 2>&1 | tee -a .ci-results/simulator.log
+            xcrun simctl shutdown "$DEVICE"
+            xcrun simctl delete "$DEVICE"
+            DEVICE=""
+          done
       - name: Retain Charony diagnostics even on failure
         if: ${{ always() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2, Node 24
         with:
           name: charony-validation-diagnostics
           include-hidden-files: true
           path: |
             .ci-results/
             .work/tests/**/*.log
-            .work/tests/ui.*/recovery.png
           if-no-files-found: error
           retention-days: 14
       - name: Upload development IPA only after all validation succeeds
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2, Node 24
         with:
           name: charony-development-unverified-on-device
           path: charony.ipa

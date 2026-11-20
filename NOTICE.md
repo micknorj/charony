@@ -6,6 +6,8 @@ Charony is a modified version of [WQ Files (Worse Query Files)](https://github.c
 
 Modifications began on November 19, 2026. Charony reduces the product to application data and cache management, removes application logging and networking, changes scan persistence, and adds Charony branding and validation infrastructure.
 
+The single-word application-identifier correction and Apple-only fallback-icon keyword matching were adapted from WQ Files v0.9.19 during the November 20, 2026 review. Its App Store networking and other out-of-scope features were not imported.
+
 WQ Files and Charony are licensed under GPL-3.0-or-later. The complete license text is in [LICENSE](LICENSE). Preserve this notice and original source notices, and distribute corresponding source for the exact binary, including modifications and build scripts.
 
 ## Access techniques

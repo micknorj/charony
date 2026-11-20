@@ -11,6 +11,18 @@ int main(void)
 {
     @autoreleasepool {
         NSFileManager *fm = NSFileManager.defaultManager;
+        for (NSArray<NSNumber *> *parts in @[@[@26,@0,@0], @[@26,@7,@2], @[@27,@0,@0], @[@27,@2,@1], @[@27,@3,@0]]) {
+            NSOperatingSystemVersion version = {parts[0].integerValue, parts[1].integerValue, parts[2].integerValue};
+            check(WQAccessVersionAllowed(version), @"approved OS version passes the range policy");
+        }
+        for (NSArray<NSNumber *> *parts in @[@[@25,@9,@0], @[@26,@7,@3], @[@26,@8,@0], @[@27,@3,@1], @[@27,@4,@0], @[@28,@0,@0]]) {
+            NSOperatingSystemVersion version = {parts[0].integerValue, parts[1].integerValue, parts[2].integerValue};
+            check(!WQAccessVersionAllowed(version), @"unsupported OS version fails closed");
+        }
+        check(WQAccessBuildIdentifierValid(@"24B156") && WQAccessBuildIdentifierValid(@"24C5037i"), @"release and beta build formats are accepted");
+        for (NSString *build in @[@"", @"unknown", @"24B", @"24B156/extra", @"24B156\n", @"999999999999A1"])
+            check(!WQAccessBuildIdentifierValid(build), @"unreadable build format fails closed");
+        check(!WQAccessBuildIdentifierValid(nil), @"missing build format fails closed");
         NSString *lcReal = @"/private/var/mobile/Containers/Shared/AppGroup/B1E3527C-AA70-4F5C-A443-410B7D47ABBE";
         check([WQGroupRootForPath([lcReal stringByAppendingString:@"/LiveContainer/Data/AppGroup/group.com.rileytestut.AltStore.X"]) isEqualToString:lcReal], @"LiveContainer stand-in maps to the real group");
         check([WQGroupRootForPath(@"/var/mobile/Containers/Shared/AppGroup/ABC/LiveContainer/Data/AppGroup/g") isEqualToString:@"/var/mobile/Containers/Shared/AppGroup/ABC"], @"/var alias accepted");
@@ -31,6 +43,7 @@ int main(void)
         check(WQWorseQueryPatchedBuild(@"24D5010a"), @"27.4 patched");
         check(WQWorseQueryPatchedBuild(@"25A5300a"), @"iOS 28 patched");
         check(!WQWorseQueryPatchedBuild(@"24B85"), @"27.2.1 not patched");
+        check(!WQWorseQueryPatchedBuild(@"24B156"), @"maintainer target build passes access guard; hardware access remains unverified");
         check(!WQWorseQueryPatchedBuild(@"24A350"), @"27.0.1 not patched");
         check(!WQWorseQueryPatchedBuild(@"23H31"), @"iOS 26 not patched");
         check(!WQWorseQueryPatchedBuild(@""), @"empty build not patched");

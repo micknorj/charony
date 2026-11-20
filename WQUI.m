@@ -2,6 +2,101 @@
 #import "WQAccess.h"
 #import "WQScanTask.h"
 #import <fcntl.h>
+
+static void wq_window_text_category(UIWindow *window, UIContentSizeCategory category)
+{
+    window.maximumContentSizeCategory = UIContentSizeCategoryLarge;
+    if (!category || UIContentSizeCategoryCompareToCategory(category, UIContentSizeCategoryLarge) == NSOrderedDescending)
+        category = UIContentSizeCategoryLarge;
+    // UIKit recreates navigation/Search controls outside a list's view tree.
+    // Bound the inherited category too, including after a system text change.
+    window.traitOverrides.preferredContentSizeCategory = category;
+}
+
+void wq_configure_window(UIWindow *window)
+{
+    static NSHashTable<UIWindow *> *windows;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        windows = NSHashTable.weakObjectsHashTable;
+        [NSNotificationCenter.defaultCenter addObserverForName:UIContentSizeCategoryDidChangeNotification object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *note) {
+            UIContentSizeCategory category = note.userInfo[UIContentSizeCategoryNewValueKey];
+            for (UIWindow *ownedWindow in windows.allObjects)
+                wq_window_text_category(ownedWindow, category ?: ownedWindow.windowScene.traitCollection.preferredContentSizeCategory);
+        }];
+    });
+    [windows addObject:window];
+    wq_window_text_category(window, window.windowScene.traitCollection.preferredContentSizeCategory);
+}
+
+UIFont *wq_font(UIFontTextStyle style, UITraitCollection *traits)
+{
+    UIContentSizeCategory category = traits.preferredContentSizeCategory ?: UIContentSizeCategoryLarge;
+    if (UIContentSizeCategoryCompareToCategory(category, UIContentSizeCategoryLarge) == NSOrderedDescending)
+        category = UIContentSizeCategoryLarge;
+    return [UIFont preferredFontForTextStyle:style compatibleWithTraitCollection:
+        [UITraitCollection traitCollectionWithPreferredContentSizeCategory:category]];
+}
+
+void wq_prepare_list(UITableViewController *host, NSString *title)
+{
+    host.title = title;
+    host.view.maximumContentSizeCategory = UIContentSizeCategoryLarge;
+    host.navigationItem.largeTitleDisplayMode = UINavigationItemLargeTitleDisplayModeNever;
+    host.navigationItem.title = @"";
+    UILabel *label = [UILabel new];
+    label.text = title;
+    label.maximumContentSizeCategory = UIContentSizeCategoryLarge;
+    label.font = wq_font(UIFontTextStyleHeadline, host.traitCollection);
+    label.adjustsFontForContentSizeCategory = YES;
+    label.accessibilityTraits |= UIAccessibilityTraitHeader;
+    host.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc] initWithCustomView:label];
+    host.tableView.rowHeight = UITableViewAutomaticDimension;
+    host.tableView.estimatedRowHeight = 84;
+    host.tableView.sectionHeaderHeight = UITableViewAutomaticDimension;
+    host.tableView.estimatedSectionHeaderHeight = 44;
+    host.tableView.sectionFooterHeight = 0;
+    host.tableView.estimatedSectionFooterHeight = 0;
+}
+
+void wq_empty_message(UITableView *table, NSString *message, float fraction)
+{
+    if (!message.length) { table.backgroundView = nil; return; }
+    UIView *background = [UIView new];
+    UILabel *label = [UILabel new];
+    label.text = message;
+    label.numberOfLines = 0;
+    label.textAlignment = NSTextAlignmentCenter;
+    label.textColor = UIColor.secondaryLabelColor;
+    label.font = wq_font(UIFontTextStyleBody, table.traitCollection);
+    label.adjustsFontForContentSizeCategory = YES;
+    UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:@[label]];
+    stack.axis = UILayoutConstraintAxisVertical;
+    stack.spacing = 12;
+    if (fraction >= 0) {
+        UIProgressView *progress = [[UIProgressView alloc] initWithProgressViewStyle:UIProgressViewStyleDefault];
+        progress.progress = MIN(1.0f, fraction);
+        progress.accessibilityLabel = @"Scan progress";
+        [stack addArrangedSubview:progress];
+    }
+    stack.translatesAutoresizingMaskIntoConstraints = NO;
+    [background addSubview:stack];
+    [NSLayoutConstraint activateConstraints:@[
+        [stack.leadingAnchor constraintEqualToAnchor:background.leadingAnchor constant:24],
+        [stack.trailingAnchor constraintEqualToAnchor:background.trailingAnchor constant:-24],
+        [stack.centerYAnchor constraintEqualToAnchor:background.centerYAnchor],
+    ]];
+    table.backgroundView = background;
+}
+
+UIBarButtonItem *wq_refresh_button(id target, SEL action, BOOL enabled)
+{
+    UIBarButtonItem *button = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemRefresh target:target action:action];
+    button.accessibilityLabel = @"Refresh";
+    button.accessibilityIdentifier = @"refresh";
+    button.enabled = enabled;
+    return button;
+}
 // Private: app icon by bundle id (in UIKit; guarded with respondsToSelector).
 @interface UIImage (WQPrivate)
 + (UIImage *)_applicationIconImageForBundleIdentifier:(NSString *)bid format:(int)fmt scale:(CGFloat)scale;
@@ -179,9 +274,13 @@ static UIImage *wq_service_tile(NSString *bundleID)
         ];
     });
     NSString *key = bundleID.lowercaseString;
-    NSString *symbol = @"gearshape.fill";
+    NSString *symbol = @"app.fill";
     UIColor *color = UIColor.systemGrayColor;
-    for (NSArray *rule in rules) {
+    // Service keywords describe Apple components, not arbitrary third-party
+    // identifiers (for example, "facebook" must not become a Books icon).
+    BOOL apple = [key hasPrefix:@"com.apple."] || [key hasPrefix:@"group.com.apple."] ||
+                 [key hasPrefix:@"systemgroup.com.apple."];
+    for (NSArray *rule in apple ? rules : @[]) {
         BOOL hit = NO;
         for (NSString *word in rule[0]) if ([key containsString:word]) { hit = YES; break; }
         if (hit) { symbol = rule[1]; color = rule[2]; break; }
@@ -196,7 +295,7 @@ static UIImage *wq_service_tile(NSString *bundleID)
         [fill setFill];
         [[UIBezierPath bezierPathWithRoundedRect:CGRectMake(0, 0, s, s) cornerRadius:s * 0.225] fill];
         UIImageSymbolConfiguration *cfg = [UIImageSymbolConfiguration configurationWithPointSize:19 weight:UIImageSymbolWeightSemibold];
-        UIImage *g = [[UIImage systemImageNamed:symbol withConfiguration:cfg] ?: [UIImage systemImageNamed:@"gearshape.fill" withConfiguration:cfg]
+        UIImage *g = [[UIImage systemImageNamed:symbol withConfiguration:cfg] ?: [UIImage systemImageNamed:@"app.fill" withConfiguration:cfg]
                       imageWithTintColor:UIColor.whiteColor renderingMode:UIImageRenderingModeAlwaysOriginal];
         [g drawInRect:CGRectMake((s - g.size.width) / 2, (s - g.size.height) / 2, g.size.width, g.size.height)];
     }];
@@ -309,10 +408,18 @@ void wq_alert(UIViewController *host, NSString *title, NSString *message)
     if (scene && scene.activationState != UISceneActivationStateForegroundActive) return;
     UINavigationController *nav = host.navigationController;
     if (nav && nav.topViewController != host) return;
-    if (host.presentedViewController && !host.presentedViewController.isBeingDismissed) return;
     UIAlertController *alert = wq_alert_controller(title, message, UIAlertControllerStyleAlert);
     [alert addAction:wq_alert_action(@"OK", UIAlertActionStyleDefault, nil)];
-    [host presentViewController:alert animated:YES completion:nil];
+    wq_present_confirmation(host, alert);
+}
+
+void wq_present_confirmation(UIViewController *host, UIAlertController *alert)
+{
+    UITabBarController *tabs = host.tabBarController;
+    if ([tabs conformsToProtocol:@protocol(CHContextAlertPresentation)] &&
+        [(id<CHContextAlertPresentation>)tabs presentContextAlert:alert from:host]) return;
+    if (!host.presentedViewController && host.view.window)
+        [host presentViewController:alert animated:YES completion:nil];
 }
 
 NSString *wq_size_text(unsigned long long size)
@@ -330,7 +437,7 @@ NSString *wq_size_text(unsigned long long size)
 {
     if ((self = [super initWithReuseIdentifier:reuseIdentifier])) {
         _label = [UILabel new];
-        _label.font = [UIFont preferredFontForTextStyle:UIFontTextStyleFootnote];
+        _label.font = wq_font(UIFontTextStyleFootnote, self.traitCollection);
         _label.adjustsFontForContentSizeCategory = YES;
         _label.textColor = UIColor.secondaryLabelColor;
         _label.numberOfLines = 0;
@@ -365,13 +472,13 @@ NSString *wq_size_text(unsigned long long size)
 void wq_offer_access_recovery(UIViewController *host)
 {
     if (!wq_access_cache_needs_recovery() || host.presentedViewController || !host.view.window) return;
-    UIAlertController *alert = wq_alert_controller(@"Access cache needs recovery", @"An interrupted App Group cache swap is preventing access. Reset preserves existing cache contents. Pull to refresh after recovery.", UIAlertControllerStyleAlert);
+    UIAlertController *alert = wq_alert_controller(@"Access cache needs recovery", @"Reset the interrupted App Group cache swap. Existing cache contents are preserved.", UIAlertControllerStyleAlert);
     [alert addAction:wq_alert_action(@"Cancel", UIAlertActionStyleCancel, nil)];
     [alert addAction:wq_alert_action(@"Reset Access Cache", UIAlertActionStyleDefault, ^(UIAlertAction *__unused action) {
         dispatch_async(wq_io(), ^{
             NSString *error = nil;
             BOOL ok = wq_reset_access_cache(&error);
-            dispatch_async(dispatch_get_main_queue(), ^{ wq_alert(host, ok ? @"Access cache recovered" : @"Recovery incomplete", error ?: @"Pull to refresh to retry access."); });
+            dispatch_async(dispatch_get_main_queue(), ^{ wq_alert(host, ok ? @"Access cache recovered" : @"Recovery incomplete", error ?: @"Refresh to retry access."); });
         });
     })];
     [host presentViewController:alert animated:YES completion:nil];

@@ -15,6 +15,7 @@ DEVELOPER_DIR = '/Applications/Xcode_26.2.app/Contents/Developer'
 IOS_VERSION = (26, 0)
 SDK_VERSION = (26, 2)
 DEVICE_TYPE = 'com.apple.CoreSimulator.SimDeviceType.iPhone-17'
+IPAD_DEVICE_TYPE = 'com.apple.CoreSimulator.SimDeviceType.iPad-Pro-13-inch-M5-16GB'
 
 
 def version(value):
@@ -57,22 +58,35 @@ def inspect_toolchain(run, minimum_os, simulator=False):
                       and version(runtime.get('version'))[:2] == SDK_VERSION]
         if not candidates:
             raise ValueError('No available iOS 26.2 simulator runtime. Installed inventory was printed above')
-        if not any(device.get('identifier') == DEVICE_TYPE for device in devices):
-            raise ValueError(f'Required simulator device type is unavailable: {DEVICE_TYPE}')
+        for required in [DEVICE_TYPE, IPAD_DEVICE_TYPE]:
+            if not any(device.get('identifier') == required for device in devices):
+                raise ValueError(f'Required simulator device type is unavailable: {required}')
         selected = max(candidates, key=lambda item: version(item['version']))
         report['simulator_runtime'] = selected['identifier']
         report['simulator_runtime_version'] = selected['version']
         report['simulator_device_type'] = DEVICE_TYPE
+        report['simulator_ipad_device_type'] = IPAD_DEVICE_TYPE
     return report
 
 
 def command(arguments):
-    print('$ ' + ' '.join(arguments), flush=True)
-    result = subprocess.run(arguments, text=True, stdout=subprocess.PIPE,
-                            stderr=subprocess.STDOUT, timeout=60, check=False)
-    print(result.stdout, end='' if result.stdout.endswith('\n') else '\n', flush=True)
-    result.check_returncode()
-    return result.stdout.strip()
+    # CoreSimulator's first inventory query can spend its timeout starting the
+    # hosted service. Retry only this read-only setup query, once. A second
+    # timeout, command error or invalid inventory remains a hard failure.
+    attempts = 2 if arguments[:3] == ['xcrun', 'simctl', 'list'] else 1
+    for attempt in range(attempts):
+        print('$ ' + ' '.join(arguments), flush=True)
+        try:
+            result = subprocess.run(arguments, text=True, stdout=subprocess.PIPE,
+                                    stderr=subprocess.STDOUT, timeout=60, check=False)
+        except subprocess.TimeoutExpired:
+            if attempt + 1 == attempts:
+                raise
+            print('CoreSimulator inventory timed out; retrying once without skipping validation.', flush=True)
+            continue
+        print(result.stdout, end='' if result.stdout.endswith('\n') else '\n', flush=True)
+        result.check_returncode()
+        return result.stdout.strip()
 
 
 def main():
@@ -98,7 +112,7 @@ def main():
     (output / 'toolchain.json').write_text(json.dumps(report, indent=2) + '\n')
     if args.simulator and os.environ.get('GITHUB_OUTPUT'):
         with Path(os.environ['GITHUB_OUTPUT']).open('a') as stream:
-            for key in ['simulator_runtime', 'simulator_device_type']:
+            for key in ['simulator_runtime', 'simulator_device_type', 'simulator_ipad_device_type']:
                 stream.write(f'{key}={report[key]}\n')
     print('Pinned Xcode, SDK and requested simulator availability checks passed')
 

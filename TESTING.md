@@ -1,25 +1,31 @@
 # Testing and verification
 
-## Verified baseline
+## Verified development revision
 
-The initial native validation passed on independent root `0e8a450f3b1abeee0ea00101cc5adbf36a6bfdff` in [GitHub Actions run 44574969914](https://github.com/micknorj/charony/actions/runs/44574969914). Both `upstream-baseline` and `charony` succeeded. This is build, fixture and simulator evidence; physical-device behavior remains unverified.
+Revision `504061a780d6dd0e1ffb054a968f405fe350dd3c` passed [push validation 44763475557](https://github.com/micknorj/charony/actions/runs/44763475557) and [PR validation 44763482819](https://github.com/micknorj/charony/actions/runs/44763482819). Both required jobs succeeded in both runs. This includes all four iPhone/iPad Light/Dark profiles at the largest system accessibility text setting. Subsequent checks are attached to their exact commits in [PR #2](https://github.com/micknorj/charony/pull/2). This is build, fixture and simulator evidence; physical-device behavior remains unverified.
 
 | Check | Result | Platform / evidence |
 | --- | --- | --- |
 | Unchanged WQ Files v0.9.18 runner | Passed, including 32 Python tests and native suites | Four-CPU Intel macOS, Xcode 26.2; `upstream-baseline` job |
 | Optional upstream ffmpeg-video subcase | Skipped: ffmpeg unavailable | Removed Charony functionality; not device evidence |
-| Current portable suite | 42 tests passed | macOS; `tests/test_*.py` |
+| Current portable suite | 47 tests passed | macOS and Linux; `tests/test_*.py` |
 | Current native safety fixtures | All 10 executables passed | Arm64 macOS; `tests/run_all_tests.sh` |
 | Strict iOS syntax, compilation and linking | Passed with `-Wall -Wextra -Werror` | Arm64, Xcode / iOS SDK 26.2, deployment target 26.0 |
 | Source and compiled-binary privacy audits | Passed | Real built executable; `scripts/privacy_audit.py` |
 | Flat development icon / asset compilation | Passed | `actool`, compiled `Assets.car` |
 | Development IPA, metadata, exact App Group entitlement and ad-hoc signature | Passed | Real IPA; build verification and extracted signature check |
-| UIKit, lifecycle and cold-relaunch fixtures | Passed | Disposable iPhone 17 / iOS 26.2 simulator |
+| UIKit, mutations, lifecycle and cold relaunch | Passed, all four profiles | Disposable iPhone 17 and iPad Pro 13-inch M5 / iOS 26.2, Light/Dark, largest system accessibility text |
 | Downloaded final IPA structural/metadata recheck | Passed | Linux; `scripts/verify_ipa.py` |
 | Layered Icon Composer appearances | Incomplete | Flat icon only |
 | Final sideloaded signature, physical App Group/access and actual deletion | Unverified | No physical device tested |
 
-No required check failed in that run. Historical Linux baseline failures were missing-tool limitations, not established application defects. Native CI subsequently passed the unchanged baseline. See [safety coverage](docs/SAFETY.md#baseline-failures) for the classification.
+No required check failed in those runs. Downloaded artifact archives matched their GitHub SHA-256 digests. The actual IPA passed an independent package recheck and Mach-O inspection: arm64, iOS 26.0 minimum / SDK 26.2, exact App Group entitlement, no fixture-host markers, logging/network imports or runtime URLs. The XML entitlement DTD URL is signature metadata, not a network request. CI verified the ad-hoc signature before and after packaging; there is no embedded provisioning profile.
+
+The prior iPad `navigation-passed` timeout was reentrant navigation restoration inside UIKit's Search dismissal callback. Restoration now waits until the callback returns, with a regression asserting callback depth is zero. Query/model filter, selection and same-controller restoration remain required. A later push run at `bd51298` exposed intermittent iPad Search activation before its navigation controller appeared, although the matching PR run passed. Search now keeps an activation request until native `viewDidAppear` and verifies the selected controller/window before activation; rapid entry and real presentation readiness remain asserted. No state or deadline was weakened.
+
+The simulator emitted IOSurface/CoreText notices; Charony uses public system-font APIs, and these framework/test-host notices are not application logging. Timestamped phases traced the unbalanced-navigation-appearance warning to a fixture replacing its host during presentation of the stale-selection error. That fixture now requires the actual error to become visible and finish dismissal before handoff; refusal and untouched-data assertions remain. Broader device interaction checks remain open. One read-only CoreSimulator inventory timeout recovered on the existing bounded retry. Deprecated entitlement-output syntax was replaced with explicit XML output; exact entitlement and failure-injection gates remain.
+
+The earlier reviewed main revision `286782c0e35747f3676de1af23e4b1addabd7944` independently passed [run 44606787990](https://github.com/micknorj/charony/actions/runs/44606787990). Historical Linux baseline failures were missing-tool limitations, not established application defects. Native CI subsequently passed the unchanged baseline. See [safety coverage](docs/SAFETY.md#baseline-failures) for the classification.
 
 ## Local checks
 
@@ -33,7 +39,7 @@ python3 scripts/privacy_audit.py
 bash -n build.sh scripts/sources.sh tests/run_all_tests.sh tests/run_scan_ui_tests.sh
 ```
 
-The 42-test suite includes 19 source/package checks, seven POSIX build-pipeline methods, seven verified-baseline extraction methods and nine toolchain-preflight methods. Pipeline tests use command doubles for Apple tools; they do not replace native validation. Windows can run the source/package subset with `python -m unittest discover -s tests -p test_charony.py`; run POSIX fixtures in Cloud or macOS.
+The current 47-test suite includes 19 source/package checks, seven POSIX build-pipeline methods, seven verified-baseline extraction methods and 14 toolchain-preflight methods. The earlier main run executed 42 tests; the current total also includes the four inventory-timeout regressions and completed-state removal coverage. Pipeline tests use command doubles for Apple tools; they do not replace native validation. Windows can run the source/package subset with `python -m unittest discover -s tests -p test_charony.py`; run POSIX fixtures in Cloud or macOS.
 
 On macOS with Xcode 26.2 selected:
 
@@ -56,11 +62,11 @@ To run host/syntax checks separately, use `bash tests/run_all_tests.sh`. To rech
 | `upstream-baseline` | `macos-26-intel`, at least four active CPUs | Verify Xcode/SDKs, verify pinned stable source, run unchanged upstream tests |
 | `charony` | Arm64 `macos-26`, at least two active CPUs | Native/portable tests, strict iOS build, privacy, assets, signature/entitlements, IPA, disposable simulator |
 
-Both jobs require `/Applications/Xcode_26.2.app/Contents/Developer` and iOS 26.2 SDKs. Simulator preflight requires an available iPhone 17 / iOS 26.2 runtime. It records `toolchain.json` and fails on missing or mismatched tooling. The unchanged upstream interruption fixture needs two workers from half the active CPUs; Charony's corresponding fixture selects existing parallel mode without changing its recovery assertions.
+Both jobs require `/Applications/Xcode_26.2.app/Contents/Developer` and iOS 26.2 SDKs. Simulator preflight requires the iOS 26.2 runtime and iPhone 17 / iPad Pro 13-inch M5 (16 GB) device types. Required UIKit fixtures run on both in Light and Dark, with the simulator set to its largest accessibility text size. It records `toolchain.json` and fails on missing or mismatched tooling. A timed-out read-only CoreSimulator inventory query is retried once with the same 60-second bound. A second timeout, nonzero command result or invalid inventory still fails; tests and mutation commands are not retried by this setup helper. The unchanged upstream interruption fixture needs two workers from half the active CPUs; Charony's corresponding fixture selects existing parallel mode without changing its recovery assertions.
 
 The stable archive and all files are verified against the pinned manifest before extraction. Safety-helper comparisons do not depend on inherited Git objects. See [source provenance](ARCHITECTURE.md#source-provenance).
 
-The Charony job requires baseline success. There are no allowed-failure steps. Checkout/upload actions are pinned, permissions are `contents: read`, and checkout credentials are not persisted. No Apple credentials, provisioning profiles or signing secrets are required.
+The Charony job requires baseline success. There are no allowed-failure steps. Checkout v7.0.1 and upload-artifact v7.0.2 are pinned to full commit SHAs and use Node 24; permissions are `contents: read`, and checkout credentials are not persisted. No Apple credentials, provisioning profiles or signing secrets are required.
 
 ### Submitting changes
 
@@ -84,26 +90,42 @@ The Charony job requires baseline success. There are no allowed-failure steps. C
 
 Artifacts are retained for 14 days. Selected diagnostics are uploaded even on failure; hidden result/log paths are included. Download needed evidence before expiry. Preserve the run URL, tested SHA, toolchain record, conclusions and remaining gaps when reporting results.
 
+## Simulator execution
+
+The required UIKit harness exercises production controllers, confirmation handlers and mutation engines with disposable simulator containers. It runs on pushes, pull requests and manual dispatch. No screenshot capture job, gallery or image artifact is required.
+
+```sh
+WQ_SIMULATOR_UDID=YOUR_DISPOSABLE_BOOTED_SIMULATOR bash tests/run_scan_ui_tests.sh
+```
+
+Fixture roots and failure-injection hooks are compiled only into the test host. They do not establish real protected-app access or final device signing. Simulator failures retain bounded transition diagnostics rather than substituting outcomes. Marker timeouts retain the timestamped fixture phase history, native process stdout/stderr and a best-effort host stack sample; the required marker still fails the job. These diagnostics belong only to the test host.
+
 ## Safety coverage
 
 Native fixtures cover access-cache recovery, no-follow path checks, purge boundaries, selected-app scope, identity changes, symlinks, traversal, unrelated-file preservation, cancellation, repeated operations, missing access, scan interruption and checkpoint recovery. Clearing and cleaning must create no backup artifacts.
 
-The simulator uses production controllers with disposable fixture roots. It covers fixed crash/cache boundaries, changed-target batch refusal, manual selection, one confirmation, cancellation, unselected sentinels, contextual search/controller restoration, background/foreground handling and cold relaunch. Test-only root overrides are excluded from the production build. These fixtures do not issue real sandbox tokens.
+The simulator uses production controllers with owned disposable roots and real purge engines. It checks unloaded/loading/empty/error states, accessible-app filtering, partial-size labels, contextual search/no matches, same-controller restoration and confirmations launched from active Search. The actual registered UIAlertAction handlers are invoked by the fixture host; this is not synthesized touch input. Cancel must start no worker; accepted cache actions must retain the displayed batch when a third selection changes.
+
+Operation fixtures cover app clearing success/identity failure, whole-batch refusal, stale generation, fixed crash allowlists, symlinked ancestry, untouched unrelated/unselected sentinels, Stop outcomes distinct from access failures, no backups, mutation reservation and real outcomes deferred behind another modal. Conditional access-reset failure and full-scan consent cancellation remain required. Native host fixtures independently cover successful cache recovery, malformed LaunchServices inputs and interruption/failure injection.
+
+Typography fixtures inspect actual rendered name/identifier/size labels at accessibility settings, require fonts no larger than normal and text within row bounds, and assert smaller user sizes remain effective. Native tab-bar geometry must be at the bottom on both device families. System Light/Dark, background/foreground, task identity and cold process relaunch remain required. List footers/cards/counts and their obsolete geometry assertions were removed; scope/no-backup/offline-loss warnings are asserted in actual confirmations. Completed-result envelopes are absent after relaunch. No fixture issues real sandbox tokens.
 
 [docs/SAFETY.md](docs/SAFETY.md) records the destructive-operation model, review fixes and all 21 original portable-test dispositions. Counts alone do not establish equivalent coverage.
 
 ## Device verification
 
-Physical verification is maintainer-controlled. The intended target is an iPhone 11 Pro on iOS 27.2.1; it has not been tested with Charony.
+Physical verification is maintainer-controlled. The intended target is an iPhone 11 Pro on iOS 27.2.1, build `24B156`; it has not been tested with Charony. That exact build passes the retained patched-build predicate in a regression fixture. This checks the guard decision, not hardware access or signing.
 
 1. Review the final re-signed bundle ID, App Group entitlement and signature. The development values are `io.github.micknorj.charony` and `group.io.github.micknorj.charony`; the signer may assign a different group. Runtime must select the signer's actual usable group.
 2. Begin read-only: launch, verify group/access setup, accessible-app listing, inaccessible-app hiding, icons and size measurement. Check current permission failures and conditional Reset Access Cache.
 3. Verify refresh, pause/resume, background/foreground, interrupted scans, restart recovery and absence of completed-result caching.
-4. Check tab/search placement, keyboard/touch interaction, Light/Dark appearance, filters, confirmation/cancel, VoiceOver, Dynamic Type and supported iOS/iPad layouts. Programmatic simulator success is not complete interaction coverage.
+4. Check bottom tab/search placement, keyboard/touch interaction, Light/Dark appearance, filters, confirmation/cancel, VoiceOver, smaller text sizes and the normal-size cap on supported iOS/iPad layouts. Programmatic simulator success is not complete interaction coverage.
 5. Test deletion only on an expendable app with disposable data, preferably on a spare supported device. Check exact scope, preserved roots/unrelated files, no backups, cancellation where supported, changed identity, failure reporting and repeat behavior. Never test by deleting live Safari or Messages data.
 6. Verify real asset appearances after layered Icon Composer work is complete. Do not infer Light/Dark/Clear/Tinted icon support from flat PNG compilation.
 
-The intended Windows signing route is AltStore Classic with a free Apple account. Provisioning, refresh and service limits are controlled by Apple and the signer. Installation and App Group preservation remain unverified. If disposable-device testing is unavailable, keep destructive-device behavior marked unverified.
+The intended Windows signing route is [AltStore Classic with AltServer](https://faq.altstore.io/altstore-classic/how-to-install-altstore-windows). Follow its current Windows/iTunes/iCloud, device-trust, Wi-Fi sync and Developer Mode instructions. With a free Apple account, provisioning expires after seven days; refresh before expiry with AltServer available. Apple documents up to three installed apps per device and ten App IDs for Personal Teams; AltStore itself occupies an app slot. See [Apple membership limits](https://developer.apple.com/support/compare-memberships/).
+
+The upstream stable README says AltStore/SideStore can create the required group with free accounts. This is a documented route, not a verified Charony installation. Inspect the final executable entitlements and embedded provisioning profile for an authorized, usable group after re-signing. A copied entitlement string or the CI ad-hoc signature alone is insufficient. Installation and App Group preservation remain unverified. If disposable-device testing is unavailable, keep destructive-device behavior marked unverified.
 
 ## Release checklist
 

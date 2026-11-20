@@ -419,4 +419,27 @@ static inline BOOL WQWorseQueryPatchedBuild(NSString *build)
     return !(number >= 5000 && number < 5049);
 }
 
+// Charony's approved range is narrower than the patched-build predicate.
+// The 27.3 release train still needs that predicate to distinguish beta 1.
+static inline BOOL WQAccessVersionAllowed(NSOperatingSystemVersion version)
+{
+    if (version.minorVersion < 0 || version.patchVersion < 0) return NO;
+    if (version.majorVersion == 26)
+        return version.minorVersion < 7 || (version.minorVersion == 7 && version.patchVersion <= 2);
+    if (version.majorVersion == 27)
+        return version.minorVersion < 3 || (version.minorVersion == 3 && version.patchVersion == 0);
+    return NO;
+}
+
+static inline BOOL WQAccessBuildIdentifierValid(NSString *build)
+{
+    if (![build isKindOfClass:NSString.class]) return NO;
+    static NSRegularExpression *pattern;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        pattern = [NSRegularExpression regularExpressionWithPattern:@"\\A[0-9]{2}[A-Z][0-9]{1,6}[a-z]?\\z" options:0 error:nil];
+    });
+    return [pattern numberOfMatchesInString:build options:0 range:NSMakeRange(0, build.length)] == 1;
+}
+
 #endif
