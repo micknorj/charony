@@ -65,6 +65,9 @@ static void runAccessibleCacheLayoutFixture(void)
 @implementation CHFixtureApps
 - (void)scan {}
 @end
+@interface WQAppsViewController (CHPresentationFixtures)
+- (void)presentPendingClearResult;
+@end
 // Wait for genuine UIKit presentation before switching away from Search.
 // The former synchronous test switched tabs before Search became active.
 static void selectFixtureTab(UITabBarController *tabs, UITab *tab)
@@ -88,6 +91,41 @@ static void awaitUIKitState(BOOL (^ready)(void), NSUInteger remaining, NSString 
     }
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 100 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{
         awaitUIKitState(ready, remaining - 1, assertion, diagnostics, next);
+    });
+}
+static void runDeferredClearResultFixture(UIWindow *window, dispatch_block_t next)
+{
+    CHFixtureApps *controller = [CHFixtureApps new];
+    window.rootViewController = [[UINavigationController alloc] initWithRootViewController:controller];
+    [window layoutIfNeeded];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        UIViewController *presenter = controller.navigationController;
+        wq_alert(presenter, @"Fixture blocking alert", @"Disposable presentation fixture; no app data is cleared.");
+        NSDictionary *(^diagnostics)(void) = ^NSDictionary *{
+            return @{@"alert":presenter.presentedViewController.title ?: @"nil",
+                @"pending":[controller valueForKey:@"pendingClearTitle"] ?: @"nil",
+                @"attached":@(controller.view.window != nil)};
+        };
+        awaitUIKitState(^BOOL { return [presenter.presentedViewController.title isEqualToString:@"Fixture blocking alert"] &&
+                                      !presenter.presentedViewController.isBeingPresented; },
+            150, @"blocking-alert-is-actually-presented", diagnostics, ^{
+            [controller setValue:@"Clear incomplete" forKey:@"pendingClearTitle"];
+            [controller setValue:@"Disposable result-presentation fixture." forKey:@"pendingClearMessage"];
+            [controller presentPendingClearResult];
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 600 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{
+                check([presenter.presentedViewController.title isEqualToString:@"Fixture blocking alert"] &&
+                      [[controller valueForKey:@"pendingClearTitle"] isEqualToString:@"Clear incomplete"],
+                      @"clear-outcome-waits-without-replacing-the-current-alert");
+                [presenter dismissViewControllerAnimated:NO completion:^{
+                    awaitUIKitState(^BOOL { return [controller.presentedViewController.title isEqualToString:@"Clear incomplete"] &&
+                                                  !controller.presentedViewController.isBeingPresented; },
+                        150, @"deferred-clear-result-appears-after-modal-dismissal", diagnostics, ^{
+                        check([controller valueForKey:@"pendingClearTitle"] == nil, @"delivered-clear-result-is-consumed-once");
+                        [controller dismissViewControllerAnimated:NO completion:next];
+                    });
+                }];
+            });
+        });
     });
 }
 static void runActiveSearchNavigationFixtures(UITabBarController *tabs, WQAppsViewController *apps,
@@ -472,7 +510,9 @@ static void runCacheBatchFixtures(UIWindow *window, dispatch_block_t next)
         }
         check(destructive == 1 && cancel == 1, @"one-clear-data-confirmation-and-cancel");
         [apps dismissViewControllerAnimated:NO completion:^{
-            runCacheBatchFixtures(self.window, ^{ [self beginLifecycleValidation]; });
+            runCacheBatchFixtures(self.window, ^{
+                runDeferredClearResultFixture(self.window, ^{ [self beginLifecycleValidation]; });
+            });
         }];
         });
     });

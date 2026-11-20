@@ -54,6 +54,7 @@
     WQScanCancellation *_scanCancellation;
     NSUInteger _scanGeneration;
     BOOL _scanning;
+    BOOL _clearResultDeliveryScheduled;
     NSString *_pendingClearTitle, *_pendingClearMessage;
     NSArray<NSString *> *_indexTitles;
     NSDictionary<NSString *, NSNumber *> *_indexRows;
@@ -544,6 +545,7 @@ static BOOL wq_dir_size_cancellable(NSString *dir, NSString *taskID, WQScanCance
 {
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
     if (_busy || _scanTask.userPaused) return;
+    if (_pendingClearTitle) { [self presentPendingClearResult]; return; }
     WQAppItem *app = self.visibleApps[(NSUInteger)indexPath.row];
     UIAlertController *alert = wq_alert_controller([NSString stringWithFormat:@"Clear %@?", app.name],
         @"Permanently empties this app's Documents, Library and tmp. Logins, settings and offline content are lost. No backup is created. Close the app first. Safari and Messages cleanup is best effort and may leave data in other containers.", UIAlertControllerStyleAlert);
@@ -574,9 +576,28 @@ static BOOL wq_dir_size_cancellable(NSString *dir, NSString *taskID, WQScanCance
 }
 - (void)presentPendingClearResult
 {
-    if (!_pendingClearTitle || !self.view.window || self.presentedViewController ||
+    if (!_pendingClearTitle || !self.view.window ||
         self.navigationController.topViewController != self ||
         self.view.window.windowScene.activationState != UISceneActivationStateForegroundActive) return;
+    BOOL modal = NO;
+    for (UIViewController *host = self; host; host = host.parentViewController)
+        if (host.presentedViewController) { modal = YES; break; }
+    if (modal) {
+        // UIAlert dismissal does not reliably call the presenting screen's
+        // viewDidAppear. Retain the outcome and retry only while this screen
+        // is visible/active; navigation/foreground callbacks resume delivery.
+        if (!_clearResultDeliveryScheduled) {
+            _clearResultDeliveryScheduled = YES;
+            __weak WQAppsViewController *weakSelf = self;
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 250 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{
+                WQAppsViewController *controller = weakSelf;
+                if (!controller) return;
+                controller->_clearResultDeliveryScheduled = NO;
+                [controller presentPendingClearResult];
+            });
+        }
+        return;
+    }
     wq_alert(self, _pendingClearTitle, _pendingClearMessage);
     _pendingClearTitle = nil;
     _pendingClearMessage = nil;

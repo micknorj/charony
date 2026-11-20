@@ -245,7 +245,7 @@ static WQCacheItem *CHCacheRow(NSString *name, NSString *bundle)
 {
     [self later:^{
         [self.window layoutIfNeeded];
-        NSDictionary *alerts=@{@"app-clear-confirmation":[NSString stringWithFormat:@"Clear %@?", [[[self.apps valueForKey:@"visibleApps"] firstObject] valueForKey:@"name"]], @"cache-clean-confirmation":@"Clean caches?", @"cache-selection-changed":@"Selection changed", @"crash-reports-confirmation":@"Clean caches?", @"crash-reports-only-confirmation":@"Clean caches?", @"operation-in-progress":@"Operation in progress", @"cache-access-limited":@"Not cleanable", @"full-scan-consent":@"Scan app containers?", @"app-clear-success":@"Data cleared", @"app-clear-failure":@"Clear incomplete", @"access-cache-recovery":@"Access cache needs recovery", @"access-cache-reset-failure":@"Recovery incomplete"};
+        NSDictionary *alerts=@{@"app-clear-confirmation":[NSString stringWithFormat:@"Clear %@?", [[[self.apps valueForKey:@"visibleApps"] firstObject] valueForKey:@"name"]], @"cache-clean-confirmation":@"Clean caches?", @"cache-selection-changed":@"Selection changed", @"crash-reports-confirmation":@"Clean caches?", @"crash-reports-only-confirmation":@"Clean caches?", @"operation-in-progress":@"Operation in progress", @"app-clear-deferred-blocker":@"Operation in progress", @"app-clear-result-deferred":@"Operation in progress", @"app-clear-deferred-success":@"Data cleared", @"cache-access-limited":@"Not cleanable", @"full-scan-consent":@"Scan app containers?", @"app-clear-success":@"Data cleared", @"app-clear-failure":@"Clear incomplete", @"access-cache-recovery":@"Access cache needs recovery", @"access-cache-reset-failure":@"Recovery incomplete"};
         NSString *expected=alerts[identifier];
         if (!expected && ![identifier isEqualToString:@"unsupported-build-startup"] && ![identifier isEqualToString:@"apps-sort-filter-menu"]) {
             UIViewController *visible = CHTop(self.window.rootViewController);
@@ -417,6 +417,27 @@ static WQCacheItem *CHCacheRow(NSString *name, NSString *bundle)
     }; [gallery offer:@"operation-in-progress" title:@"Concurrent operation refused" note:@"Actual cross-tab mutation reservation alert"]; }];
     [gallery add:^{ [gallery until:^BOOL{return [CHTop(gallery.window.rootViewController).title isEqualToString:@"Data cleared"];} attempts:150 then:^{ [gallery offer:@"app-clear-success" title:@"Apps — clear success" note:@"Actual disposable-file clear outcome; not protected-app validation"]; }]; }];
     [gallery add:^{ [gallery dismiss]; [gallery seedApps]; NSString *path=[[[gallery.apps valueForKey:@"visibleApps"] firstObject] valueForKey:@"container"]; [@{@"MCMMetadataIdentifier":@"com.example.changed"} writeToFile:[path stringByAppendingPathComponent:@".com.apple.mobile_container_manager.metadata.plist"] atomically:YES]; [gallery.apps clear:[[gallery.apps valueForKey:@"visibleApps"] firstObject]]; [gallery until:^BOOL{return [CHTop(gallery.window.rootViewController).title isEqualToString:@"Clear incomplete"];} attempts:150 then:^{ [gallery offer:@"app-clear-failure" title:@"Apps — identity refusal" note:@"Real validator refuses changed fixture identity before deleting data"]; }]; }];
+    [gallery add:^{
+        [gallery seedApps]; CHArmOperation();
+        [gallery.apps clear:[[gallery.apps valueForKey:@"visibleApps"] firstObject]];
+        [gallery until:^BOOL { return atomic_load(&CHReached); } attempts:150 then:^{
+            (void)wq_begin_mutation(gallery.apps);
+            gallery.keepAlertAfterCapture = YES;
+            gallery.afterCapture = ^{ CHReleaseOperation(); };
+            [gallery offer:@"app-clear-deferred-blocker" title:@"Apps — alert covers a held clear" note:@"Real disposable clear; keep this actual conflict alert open while the worker finishes"];
+        }];
+    }];
+    [gallery add:^{
+        [gallery until:^BOOL { return ![[gallery.apps valueForKey:@"busy"] boolValue] &&
+            [[gallery.apps valueForKey:@"pendingClearTitle"] isEqualToString:@"Data cleared"]; } attempts:150 then:^{
+            [gallery offer:@"app-clear-result-deferred" title:@"Apps — completed result waits behind alert" note:@"Real worker has finished; its outcome must not replace the current modal. Dismiss after this frame"];
+        }];
+    }];
+    [gallery add:^{
+        [gallery until:^BOOL { return [CHTop(gallery.window.rootViewController).title isEqualToString:@"Data cleared"]; } attempts:150 then:^{
+            [gallery offer:@"app-clear-deferred-success" title:@"Apps — deferred result delivered after dismissal" note:@"Actual disposable-file outcome appears automatically after the blocking modal closes"];
+        }];
+    }];
     [gallery add:^{ [gallery showTab:1]; [gallery publish:@"clean" rows:@[] note:nil]; [gallery offer:@"caches-initial" title:@"Caches — initial idle fixture" note:nil]; }];
     [gallery add:^{ WQScanTask *t=[WQScanTask taskNamed:@"clean"]; NSUInteger g=[t beginFresh:YES cancel:^{}]; [t progress:@"Finding apps…" fraction:0.35 generation:g]; [gallery.caches setValue:@0.35 forKey:@"scanProgress"]; [gallery.caches.tableView reloadData]; [gallery offer:@"caches-loading" title:@"Caches — loading" note:@"Fixture-driven scan status"]; }];
     [gallery add:^{ [gallery seedCaches]; [gallery offer:@"caches-populated" title:@"Caches — populated, no selection" note:nil]; }];
