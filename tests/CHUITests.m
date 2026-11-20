@@ -50,6 +50,12 @@ static void check(BOOL condition, NSString *name)
 @property (nonatomic) NSUInteger dismissalCallbackDepth;
 @end
 @implementation CHObservedTabs
+- (void)willPresentSearchController:(UISearchController *)controller
+{
+    check(self.searchNavigation.contextVisible && self.searchRoot.view.window != nil && self.selectedTab == self.searchTab,
+          @"search-presentation-waits-for-its-selected-navigation-controller-to-appear");
+    (void)controller;
+}
 - (void)didDismissSearchController:(UISearchController *)controller
 {
     self.dismissalCallbackDepth++;

@@ -9,18 +9,37 @@
 // UISearchTab supplies the native trailing search affordance. The selected
 // controller moves into its navigation stack for search, keeping selections
 // and scan state in the same controller instance.
+@interface CHSearchNavigation : UINavigationController
+@property (nonatomic) BOOL contextVisible;
+@property (nonatomic, copy) dispatch_block_t contextDidAppear;
+@end
+@implementation CHSearchNavigation
+- (void)viewDidAppear:(BOOL)animated
+{
+    [super viewDidAppear:animated];
+    self.contextVisible = YES;
+    if (self.contextDidAppear) self.contextDidAppear();
+}
+- (void)viewWillDisappear:(BOOL)animated
+{
+    self.contextVisible = NO;
+    [super viewWillDisappear:animated];
+}
+@end
 @interface CHTabs : UITabBarController <UITabBarControllerDelegate, UISearchControllerDelegate, CHContextAlertPresentation>
 @property (nonatomic, strong) UITab *contextTab;
 @property (nonatomic, strong) UITab *pendingTab;
 @property (nonatomic, strong) UISearchTab *searchTab;
 @property (nonatomic, strong) UINavigationController *contextNavigation;
-@property (nonatomic, strong) UINavigationController *searchNavigation;
+@property (nonatomic, strong) CHSearchNavigation *searchNavigation;
 @property (nonatomic, strong) UITableViewController *searchRoot;
 @property (nonatomic, copy) NSString *contextQuery;
 @property (nonatomic, strong) UIAlertController *contextAlert;
 @property (nonatomic, weak) UIViewController *contextAlertHost;
 @property (nonatomic) BOOL contextRestoreScheduled;
+@property (nonatomic) BOOL searchActivationPending;
 - (void)restoreContext;
+- (void)activatePendingSearch;
 @end
 @implementation CHTabs
 - (void)viewDidLoad
@@ -37,9 +56,10 @@
     self.tabBar.maximumContentSizeCategory = UIContentSizeCategoryLarge;
     UITab *appsTab = [[UITab alloc] initWithTitle:@"Apps" image:[UIImage systemImageNamed:@"square.grid.2x2"] identifier:@"apps" viewControllerProvider:^UIViewController *(UITab *__unused tab) { return apps; }];
     UITab *cachesTab = [[UITab alloc] initWithTitle:@"Caches" image:[UIImage systemImageNamed:@"sparkles"] identifier:@"caches" viewControllerProvider:^UIViewController *(UITab *__unused tab) { return caches; }];
-    self.searchNavigation = [[UINavigationController alloc] initWithRootViewController:[UIViewController new]];
+    self.searchNavigation = [[CHSearchNavigation alloc] initWithRootViewController:[UIViewController new]];
     self.searchNavigation.navigationBar.maximumContentSizeCategory = UIContentSizeCategoryLarge;
     __weak CHTabs *weakSelf = self;
+    self.searchNavigation.contextDidAppear = ^{ [weakSelf activatePendingSearch]; };
     self.searchTab = [[UISearchTab alloc] initWithViewControllerProvider:^UIViewController *(UITab *__unused tab) { return weakSelf.searchNavigation; }];
     self.tabs = @[appsTab, cachesTab, self.searchTab];
     self.selectedTab = appsTab;
@@ -50,6 +70,7 @@
     if (tab == self.searchTab && (self.pendingTab || self.contextRestoreScheduled)) return NO;
     if (tab == self.searchTab && self.selectedTab != self.searchTab) {
         self.contextQuery = nil;
+        self.searchActivationPending = YES;
         self.contextTab = self.selectedTab;
         self.contextNavigation = (UINavigationController *)self.selectedViewController;
         self.searchRoot = (UITableViewController *)self.contextNavigation.topViewController;
@@ -77,14 +98,26 @@
     (void)tabBarController;
     (void)previousTab;
     if (selectedTab == self.searchTab) {
-        dispatch_async(dispatch_get_main_queue(), ^{
-            self.searchRoot.navigationItem.searchController.active = YES;
-            [self.searchRoot.navigationItem.searchController.searchBar becomeFirstResponder];
-        });
+        [self activatePendingSearch];
     }
+}
+- (void)activatePendingSearch
+{
+    UITableViewController *root = self.searchRoot;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        // One queue turn after tab selection is not an appearance guarantee,
+        // especially on iPad. viewDidAppear requests this again when ready.
+        if (!self.searchActivationPending || self.selectedTab != self.searchTab || self.searchRoot != root ||
+            !self.searchNavigation.contextVisible || self.searchNavigation.topViewController != root || !root.view.window)
+            return;
+        self.searchActivationPending = NO;
+        root.navigationItem.searchController.active = YES;
+        [root.navigationItem.searchController.searchBar becomeFirstResponder];
+    });
 }
 - (void)restoreContext
 {
+    self.searchActivationPending = NO;
     UITableViewController *root = self.searchRoot;
     UISearchController *search = root.navigationItem.searchController;
     NSString *query = self.contextQuery ?: search.searchBar.text ?: @"";
