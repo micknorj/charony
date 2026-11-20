@@ -29,7 +29,12 @@ jobs:
             --app-icon AppIcon --standalone-icon-behavior all \
             --output-partial-info-plist .icon-results/icon-info.plist --errors --warnings \
             --output-format human-readable-text 2>&1 | tee .icon-results/compile.log
-          "$TOOL" icons/AppIcon.icon --export-preview iOS Default 1024 1024 1 -45 .icon-results/default.png
+          for RENDITION in Default Dark TintedLight TintedDark; do
+            "$TOOL" icons/AppIcon.icon --export-image --output-file ".icon-results/$RENDITION.png" \
+              --platform iOS --rendition "$RENDITION" --width 1024 --height 1024 --scale 1 --light-angle -45
+          done
+          "$TOOL" icons/AppIcon.icon --export-image --output-file .icon-results/tinted-color.png \
+            --platform iOS --rendition TintedDark --width 1024 --height 1024 --scale 1 --tint-color 0.58 --tint-strength 0.7
           xcrun --find assetutil
           xcrun assetutil --info .icon-results/compiled/Assets.car > .icon-results/asset-info.json
       - name: Retain native tool evidence
