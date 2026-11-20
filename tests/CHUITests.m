@@ -41,6 +41,24 @@ static void check(BOOL condition, NSString *name)
 {
     if (!condition) { marker([@"FAIL-" stringByAppendingString:name]); abort(); }
 }
+// Observe the real production transition. A synchronous reparent used to
+// spin inside iPad UIKit layout before any timeout assertion could execute.
+@interface CHObservedTabs : CHTabs
+@property (nonatomic) NSUInteger dismissalCallbackDepth;
+@end
+@implementation CHObservedTabs
+- (void)didDismissSearchController:(UISearchController *)controller
+{
+    self.dismissalCallbackDepth++;
+    [super didDismissSearchController:controller];
+    self.dismissalCallbackDepth--;
+}
+- (void)restoreContext
+{
+    check(self.dismissalCallbackDepth == 0, @"navigation-restoration-waits-for-the-search-dismissal-callback-to-return");
+    [super restoreContext];
+}
+@end
 static NSString *visibleLabelText(UIView *view)
 {
     NSMutableArray<NSString *> *parts = [NSMutableArray new];
@@ -854,7 +872,7 @@ static void runRecoveryConsentFixtures(UIWindow *window, dispatch_block_t next)
         [apps finish:@{@"rows": @[row], @"complete": @YES} generation:generation];
         self.window = [[UIWindow alloc] initWithWindowScene:(UIWindowScene *)scene];
     wq_configure_window(self.window);
-        self.window.rootViewController = [NSClassFromString(@"CHTabs") new];
+        self.window.rootViewController = [CHObservedTabs new];
         [self.window makeKeyAndVisible];
         dispatch_async(dispatch_get_main_queue(), ^{
             UITabBarController *tabs = (UITabBarController *)self.window.rootViewController;
@@ -883,7 +901,7 @@ static void runRecoveryConsentFixtures(UIWindow *window, dispatch_block_t next)
         [task finish:@{@"rows": rows, @"note": @"", @"complete": @YES} generation:generation];
     }
     wq_scan_lifecycle_install();
-    UITabBarController *tabs = [NSClassFromString(@"CHTabs") new];
+    UITabBarController *tabs = [CHObservedTabs new];
     self.window.rootViewController = tabs;
     [self.window makeKeyAndVisible];
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC), dispatch_get_main_queue(), ^{

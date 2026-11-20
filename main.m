@@ -19,6 +19,8 @@
 @property (nonatomic, copy) NSString *contextQuery;
 @property (nonatomic, strong) UIAlertController *contextAlert;
 @property (nonatomic, weak) UIViewController *contextAlertHost;
+@property (nonatomic) BOOL contextRestoreScheduled;
+- (void)restoreContext;
 @end
 @implementation CHTabs
 - (void)viewDidLoad
@@ -45,7 +47,7 @@
 - (BOOL)tabBarController:(UITabBarController *)tabBarController shouldSelectTab:(UITab *)tab
 {
     (void)tabBarController;
-    if (tab == self.searchTab && self.pendingTab) return NO;
+    if (tab == self.searchTab && (self.pendingTab || self.contextRestoreScheduled)) return NO;
     if (tab == self.searchTab && self.selectedTab != self.searchTab) {
         self.contextQuery = nil;
         self.contextTab = self.selectedTab;
@@ -58,7 +60,7 @@
         self.searchNavigation.viewControllers = @[self.searchRoot];
     } else if (tab != self.searchTab && self.searchRoot) {
         UISearchController *search = self.searchRoot.navigationItem.searchController;
-        if (search.active || search.presentingViewController || self.pendingTab) {
+        if (search.active || search.presentingViewController || self.pendingTab || self.contextRestoreScheduled) {
             // UIKit must finish dismissing Search before its presenting
             // controller moves between navigation stacks.
             self.pendingTab = tab;
@@ -113,8 +115,17 @@
 }
 - (void)didDismissSearchController:(UISearchController *)searchController
 {
-    if (self.searchRoot && searchController != [(id<CHSearchable>)self.searchRoot contextSearchController]) return;
-    if (self.searchRoot) {
+    if (!self.searchRoot || self.contextRestoreScheduled ||
+        searchController != [(id<CHSearchable>)self.searchRoot contextSearchController]) return;
+    self.contextRestoreScheduled = YES;
+    // UIKit is still finishing its presentation transaction inside this
+    // delegate callback. Reparenting here reenters iPad navigation-bar layout.
+    // Restore on the next main-queue turn, after that transaction returns.
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (!self.searchRoot || searchController != [(id<CHSearchable>)self.searchRoot contextSearchController]) {
+            self.contextRestoreScheduled = NO;
+            return;
+        }
         UITab *context = self.pendingTab ?: self.contextTab;
         self.pendingTab = nil;
         [self restoreContext];
@@ -123,12 +134,13 @@
         UIViewController *host = self.contextAlertHost;
         self.contextAlert = nil;
         self.contextAlertHost = nil;
+        self.contextRestoreScheduled = NO;
         if (alert && host) dispatch_async(dispatch_get_main_queue(), ^{
             // A pending confirmation never follows the user to another tab.
             if (host.view.window && host.navigationController.topViewController == host && !host.presentedViewController)
                 [host presentViewController:alert animated:YES completion:nil];
         });
-    }
+    });
 }
 - (BOOL)presentContextAlert:(UIAlertController *)alert from:(UIViewController *)host
 {
