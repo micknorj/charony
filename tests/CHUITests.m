@@ -166,13 +166,20 @@ static void awaitUIKitState(BOOL (^ready)(void), NSUInteger remaining, NSString 
         awaitUIKitState(ready, remaining - 1, assertion, diagnostics, next);
     });
 }
+static void awaitFixtureVisible(UIViewController *controller, dispatch_block_t next)
+{
+    awaitUIKitState(^BOOL { return [[controller valueForKey:@"fixtureAppeared"] boolValue] && controller.view.window != nil && controller.navigationController.topViewController == controller; },
+        150, @"fixture-controller-has-completed-visible-appearance", ^NSDictionary *{
+            return @{@"controller":NSStringFromClass(controller.class), @"appeared":[controller valueForKey:@"fixtureAppeared"], @"attached":@(controller.view.window != nil)};
+        }, next);
+}
 static void runDeferredClearResultFixture(UIWindow *window, dispatch_block_t next)
 {
     phase(@"runDeferredClearResultFixture");
     CHFixtureApps *controller = [CHFixtureApps new];
     window.rootViewController = [[UINavigationController alloc] initWithRootViewController:controller];
     [window layoutIfNeeded];
-    dispatch_async(dispatch_get_main_queue(), ^{
+    awaitFixtureVisible(controller, ^{
         UIViewController *presenter = controller.navigationController;
         wq_alert(presenter, @"Fixture blocking alert", @"Disposable presentation fixture; no app data is cleared.");
         NSDictionary *(^diagnostics)(void) = ^NSDictionary *{
@@ -538,7 +545,7 @@ static void runCacheBatchFixtures(UIWindow *window, dispatch_block_t next)
         });
     };
     NSDictionary *(^diagnostics)(void) = ^NSDictionary *{ return @{@"alert":controller.presentedViewController.title ?: @"nil"}; };
-    dispatch_async(dispatch_get_main_queue(), ^{
+    awaitFixtureVisible(controller, ^{
         [controller confirmClean];
         awaitUIKitState(^BOOL { return [controller.presentedViewController isKindOfClass:UIAlertController.class] && !controller.presentedViewController.isBeingPresented; },
             150, @"batch-cancel-confirmation-presented", diagnostics, ^{
@@ -616,7 +623,7 @@ static void runCrashConfirmationFixtures(UIWindow *window, dispatch_block_t next
     [controller loadViewIfNeeded];
     [controller setValue:@[app, reports] forKey:@"items"];
     NSDictionary *(^diagnostics)(void) = ^NSDictionary *{ return @{@"alert":controller.presentedViewController.title ?: @"nil"}; };
-    dispatch_async(dispatch_get_main_queue(), ^{
+    awaitFixtureVisible(controller, ^{
         [controller confirmClean];
         awaitUIKitState(^BOOL { return [controller.presentedViewController isKindOfClass:UIAlertController.class] && !controller.presentedViewController.isBeingPresented; },
             150, @"mixed-crash-confirmation-is-presented", diagnostics, ^{
@@ -671,7 +678,7 @@ static void runRealAppClearFixtures(UIWindow *window, dispatch_block_t next)
         return @{@"alert":apps.presentedViewController.title ?: @"nil", @"busy":[apps valueForKey:@"busy"],
             @"pending":[apps valueForKey:@"pendingClearTitle"] ?: @"nil", @"reached":@(atomic_load(&CHOperationReached))};
     };
-    dispatch_async(dispatch_get_main_queue(), ^{
+    awaitFixtureVisible(apps, ^{
         NSIndexPath *index = [NSIndexPath indexPathForRow:0 inSection:0];
         [apps tableView:apps.tableView didSelectRowAtIndexPath:index];
         awaitUIKitState(^BOOL { return [apps.presentedViewController isKindOfClass:UIAlertController.class] && !apps.presentedViewController.isBeingPresented; },
@@ -747,6 +754,7 @@ static void runCacheStopFixture(UIWindow *window, dispatch_block_t next)
     [controller loadViewIfNeeded];
     [controller setValue:@[first, second] forKey:@"items"];
     [controller setValue:@"Previous cleanup outcome" forKey:@"result"];
+    awaitFixtureVisible(controller, ^{
     holdFixturePurge();
     [controller cleanItems:@[first, second] generation:[[controller valueForKey:@"scanGeneration"] unsignedIntegerValue]];
     NSDictionary *(^diagnostics)(void) = ^NSDictionary *{ return @{@"result":[controller valueForKey:@"result"] ?: @"nil"}; };
@@ -764,6 +772,7 @@ static void runCacheStopFixture(UIWindow *window, dispatch_block_t next)
             next();
         });
     });
+    });
 }
 
 static void runRecoveryConsentFixtures(UIWindow *window, dispatch_block_t next)
@@ -773,6 +782,7 @@ static void runRecoveryConsentFixtures(UIWindow *window, dispatch_block_t next)
     window.rootViewController = [[UINavigationController alloc] initWithRootViewController:apps];
     [window layoutIfNeeded];
     NSDictionary *(^diagnostics)(void) = ^NSDictionary *{ return @{@"alert":apps.presentedViewController.title ?: @"nil"}; };
+    awaitFixtureVisible(apps, ^{
     atomic_store(&gAccessRecoveryNeeded, NO);
     wq_offer_access_recovery(apps);
     check(!apps.presentedViewController, @"reset-access-cache-is-absent-without-a-recoverable-failure");
@@ -814,6 +824,7 @@ static void runRecoveryConsentFixtures(UIWindow *window, dispatch_block_t next)
                 }];
             });
         }];
+    });
     });
 }
 
