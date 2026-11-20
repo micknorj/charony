@@ -181,8 +181,8 @@ static BOOL wq_dir_size_cancellable(NSString *dir, NSString *taskID, WQScanCance
 {
     NSString *message = [self statusText];
     if (!self.visibleApps.count && !message.length) {
-        message = (_query.length || _filter > 0) ? @"No results" :
-            (_shownScanResult ? @"No accessible apps" : @"Refresh to update");
+        message = !_shownScanResult ? @"Refresh to update" :
+            ((_query.length || _filter > 0) ? @"No results" : @"No accessible apps");
     }
     wq_empty_message(self.tableView, self.visibleApps.count ? nil : message, _scanning && !_scanTask.paused ? _fraction : -1);
     [self.tableView reloadData];

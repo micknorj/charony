@@ -16,6 +16,7 @@
 @property (nonatomic, strong) UINavigationController *contextNavigation;
 @property (nonatomic, strong) UINavigationController *searchNavigation;
 @property (nonatomic, strong) UITableViewController *searchRoot;
+@property (nonatomic, copy) NSString *contextQuery;
 @property (nonatomic, strong) UIAlertController *contextAlert;
 @property (nonatomic, weak) UIViewController *contextAlertHost;
 @end
@@ -46,6 +47,7 @@
     (void)tabBarController;
     if (tab == self.searchTab && self.pendingTab) return NO;
     if (tab == self.searchTab && self.selectedTab != self.searchTab) {
+        self.contextQuery = nil;
         self.contextTab = self.selectedTab;
         self.contextNavigation = (UINavigationController *)self.selectedViewController;
         self.searchRoot = (UITableViewController *)self.contextNavigation.topViewController;
@@ -60,6 +62,7 @@
             // UIKit must finish dismissing Search before its presenting
             // controller moves between navigation stacks.
             self.pendingTab = tab;
+            if (!self.contextQuery) self.contextQuery = search.searchBar.text ?: @"";
             search.active = NO;
             return NO;
         }
@@ -81,12 +84,26 @@
 - (void)restoreContext
 {
     UITableViewController *root = self.searchRoot;
+    UISearchController *search = root.navigationItem.searchController;
+    NSString *query = self.contextQuery ?: search.searchBar.text ?: @"";
+    self.contextQuery = nil;
     self.searchRoot = nil;
     root.navigationItem.searchController.delegate = nil;
     root.navigationItem.searchController.active = NO;
     root.navigationItem.searchController = nil;
     self.searchNavigation.viewControllers = @[[UIViewController new]];
     self.contextNavigation.viewControllers = @[root];
+    // UIKit clears Search's text/filter during dismissal. Replay the captured
+    // query after that cleanup, before a queued confirmation is presented.
+    dispatch_async(dispatch_get_main_queue(), ^{
+        search.searchBar.text = query;
+        [(id<CHSearchable>)root updateSearchResultsForSearchController:search];
+    });
+}
+- (void)willDismissSearchController:(UISearchController *)searchController
+{
+    if (searchController == [(id<CHSearchable>)self.searchRoot contextSearchController] && !self.contextQuery)
+        self.contextQuery = searchController.searchBar.text ?: @"";
 }
 - (void)didPresentSearchController:(UISearchController *)searchController
 {
@@ -96,7 +113,7 @@
 }
 - (void)didDismissSearchController:(UISearchController *)searchController
 {
-    (void)searchController;
+    if (self.searchRoot && searchController != [(id<CHSearchable>)self.searchRoot contextSearchController]) return;
     if (self.searchRoot) {
         UITab *context = self.pendingTab ?: self.contextTab;
         self.pendingTab = nil;
@@ -119,6 +136,7 @@
     if (self.contextAlert || self.pendingTab) return YES;
     self.contextAlert = alert;
     self.contextAlertHost = host;
+    self.contextQuery = self.searchRoot.navigationItem.searchController.searchBar.text ?: @"";
     self.searchRoot.navigationItem.searchController.active = NO;
     return YES;
 }

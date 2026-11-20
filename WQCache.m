@@ -456,7 +456,7 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
 {
     NSString *message = [self statusText];
     if (!self.visibleItems.count && !message.length)
-        message = (_query.length || _filter > 0) ? @"No results" : (_shownScanResult ? @"No caches found" : @"Refresh to update");
+        message = !_shownScanResult ? @"Refresh to update" : ((_query.length || _filter > 0) ? @"No results" : @"No caches found");
     wq_empty_message(self.tableView, self.visibleItems.count ? nil : message, _scanning && !_scanTask.paused ? _scanProgress : -1);
     [self.tableView reloadData];
     [self updateButtons];

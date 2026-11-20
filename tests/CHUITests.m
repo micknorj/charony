@@ -269,6 +269,8 @@ static void runCacheSearchConfirmationFixture(UITabBarController *tabs, WQCacheC
     NSDictionary *(^diagnostics)(void) = ^NSDictionary *{ return @{@"selected":tabs.selectedTab.identifier ?: @"nil", @"active":@(search.active), @"alert":caches.presentedViewController.title ?: @"nil"}; };
     awaitUIKitState(^BOOL { return search.active && !search.isBeingPresented && caches.view.window; },
         150, @"cache-search-is-actually-active", diagnostics, ^{
+        [((CHTabs *)tabs) didDismissSearchController:[UISearchController new]];
+        check(((CHTabs *)tabs).searchRoot == caches && search.active, @"late-unrelated-search-dismissal-does-not-replace-current-context");
         search.searchBar.text = @"no-matching-fixture";
         [caches updateSearchResultsForSearchController:search];
         check([caches.tableView numberOfRowsInSection:0] == 0 && [visibleLabelText(caches.tableView.backgroundView) containsString:@"No results"], @"cache-search-no-results-is-distinct");
@@ -324,6 +326,11 @@ static void runAppListStateFixtures(UIWindow *window, dispatch_block_t next)
     awaitUIKitState(^BOOL { return controller.fixtureAppeared; }, 150, @"list-fixture-has-completed-native-appearance", ^NSDictionary *{ return @{@"controller":NSStringFromClass(controller.class)}; }, ^{
     check([[visibleLabelText(controller.tableView.backgroundView) stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet] isEqualToString:@"Refresh to update"], @"initial-apps-explicit-refresh-message");
     check(![WQScanTask taskNamed:@"apps"].running, @"opening-apps-does-not-start-a-scan");
+    controller.contextSearchController.searchBar.text = @"fixture";
+    [controller updateSearchResultsForSearchController:controller.contextSearchController];
+    check([visibleLabelText(controller.tableView.backgroundView) containsString:@"Refresh to update"], @"search-before-first-app-scan-does-not-claim-no-matches");
+    controller.contextSearchController.searchBar.text = @"";
+    [controller updateSearchResultsForSearchController:controller.contextSearchController];
     checkRefreshControls(controller);
     WQScanTask *task = [WQScanTask taskNamed:@"apps"];
     NSUInteger generation = [task beginFresh:YES cancel:^{}];
@@ -371,6 +378,11 @@ static void runCacheListStateFixtures(UIWindow *window, dispatch_block_t next)
     [controller loadViewIfNeeded];
     awaitUIKitState(^BOOL { return controller.fixtureAppeared; }, 150, @"list-fixture-has-completed-native-appearance", ^NSDictionary *{ return @{@"controller":NSStringFromClass(controller.class)}; }, ^{
     check([visibleLabelText(controller.tableView.backgroundView) containsString:@"Refresh to update"] && ![WQScanTask taskNamed:@"clean"].running, @"initial-caches-waits-for-explicit-refresh");
+    controller.contextSearchController.searchBar.text = @"fixture";
+    [controller updateSearchResultsForSearchController:controller.contextSearchController];
+    check([visibleLabelText(controller.tableView.backgroundView) containsString:@"Refresh to update"], @"search-before-first-cache-scan-does-not-claim-no-matches");
+    controller.contextSearchController.searchBar.text = @"";
+    [controller updateSearchResultsForSearchController:controller.contextSearchController];
     checkRefreshControls(controller);
     WQScanTask *task = [WQScanTask taskNamed:@"clean"];
     NSUInteger generation = [task beginFresh:YES cancel:^{}];
