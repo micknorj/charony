@@ -38,7 +38,7 @@ flowchart TD
 | `WQUI.m/h` | Serial mutation queue, cross-tab operation reservation, scan yielding, lifecycle handling, native alerts, bounded text styles, offline icons and progress UI |
 | `WQLocalization.m/h` | English string/format compatibility for retained error and interface code |
 
-[`scripts/sources.sh`](scripts/sources.sh) is the compile inventory. The build explicitly requests UIKit, Foundation and Security. Apple framework auto-linking also loads CoreFoundation, CoreGraphics and QuartzCore, alongside libSystem and the Objective-C runtime. There are no third-party runtime SDKs.
+[`scripts/sources.sh`](scripts/sources.sh) is the compile inventory. The build explicitly requests UIKit, Foundation and Security. Apple framework auto-linking also loads CoreFoundation and CoreGraphics, alongside libSystem and the Objective-C runtime. There are no third-party runtime SDKs.
 
 ## Destructive operations
 
@@ -94,6 +94,12 @@ Feature-exclusive source, resources, build references and tests were physically 
 Apps/Caches use native list content, Refresh and ellipsis menus. `UISearchTab` moves the same controller between navigation stacks; Search dismissal finishes before context restoration or confirmation presentation. Captured app/batch identities remain unchanged. UIKit's compact horizontal trait keeps native tabs at the bottom on iPad. Window/view text limits cap application typography at normal size while allowing smaller sizes.
 
 The screenshot host and capture scripts/job were removed. Required UIKit fixtures retain real disposable clears, captured batch actions, cancellation, concurrency refusal, deferred outcomes, conditional access recovery, Search restoration and process-relaunch recovery. Layout assertions inspect rendered labels with system accessibility text enabled; no generated images are required.
+
+## Native icon and build evidence
+
+`icons/AppIcon.icon` contains separate SVG moon, terrain and crater layers. `actool` compiles native vector groups and Light/Dark/tintable image stacks into `Assets.car`; `verify_icon.py` rejects a flattened catalog. Native `ictool` renders explicit Default, Dark, Clear Light/Dark and Tinted Light/Dark previews. The AppKit renderer regression runs only on macOS and is not linked into the application. Simulator fixtures install the same asset and verify metadata/icon registration alongside existing Light/Dark behavior.
+
+CI emits `charony-build.json` and `charony.ipa.sha256` only after required checks. The manifest records clean checkout revision/tree and actual IPA/executable/catalog hashes and metadata; it does not infer arbitrary IPA provenance or validate a final Apple profile. Source and compiled-binary privacy gates remain separate. Final Windows provisioning and actual device appearance/access require the read-only procedure.
 
 ## Source provenance
 

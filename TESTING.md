@@ -1,25 +1,25 @@
 # Testing and verification
 
-## Verified development revision
+## Verified main and current development
 
-Revision `504061a780d6dd0e1ffb054a968f405fe350dd3c` passed [push validation 44763475557](https://github.com/micknorj/charony/actions/runs/44763475557) and [PR validation 44763482819](https://github.com/micknorj/charony/actions/runs/44763482819). Both required jobs succeeded in both runs. This includes all four iPhone/iPad Light/Dark profiles at the largest system accessibility text setting. Subsequent checks are attached to their exact commits in [PR #2](https://github.com/micknorj/charony/pull/2). This is build, fixture and simulator evidence; physical-device behavior remains unverified.
+Merged main `bc67a66707de0d56e4c19cf7388373fbcee34704` passed [run 44777257355](https://github.com/micknorj/charony/actions/runs/44777257355): both required jobs and all four iPhone/iPad Light/Dark profiles. Its files match reviewed PR #2. This is simulator/build evidence, not physical-device validation. Native icon and installation-preparation changes are tracked with their exact-commit checks in [PR #3](https://github.com/micknorj/charony/pull/3).
 
 | Check | Result | Platform / evidence |
 | --- | --- | --- |
 | Unchanged WQ Files v0.9.18 runner | Passed, including 32 Python tests and native suites | Four-CPU Intel macOS, Xcode 26.2; `upstream-baseline` job |
 | Optional upstream ffmpeg-video subcase | Skipped: ffmpeg unavailable | Removed Charony functionality; not device evidence |
-| Current portable suite | 47 tests passed | macOS and Linux; `tests/test_*.py` |
+| Merged-main portable suite | 47 tests passed | macOS and Linux; `tests/test_*.py` |
 | Current native safety fixtures | All 10 executables passed | Arm64 macOS; `tests/run_all_tests.sh` |
 | Strict iOS syntax, compilation and linking | Passed with `-Wall -Wextra -Werror` | Arm64, Xcode / iOS SDK 26.2, deployment target 26.0 |
 | Source and compiled-binary privacy audits | Passed | Real built executable; `scripts/privacy_audit.py` |
-| Flat development icon / asset compilation | Passed | `actool`, compiled `Assets.car` |
+| Merged-main asset compilation | Passed with the former flat icon | Replaced by native project on PR #3; see icon evidence below |
 | Development IPA, metadata, exact App Group entitlement and ad-hoc signature | Passed | Real IPA; build verification and extracted signature check |
 | UIKit, mutations, lifecycle and cold relaunch | Passed, all four profiles | Disposable iPhone 17 and iPad Pro 13-inch M5 / iOS 26.2, Light/Dark, largest system accessibility text |
 | Downloaded final IPA structural/metadata recheck | Passed | Linux; `scripts/verify_ipa.py` |
-| Layered Icon Composer appearances | Incomplete | Flat icon only |
+| Native layered icon | Compiled and rendered with Apple tools | See native icon evidence; actual device appearance unverified |
 | Final sideloaded signature, physical App Group/access and actual deletion | Unverified | No physical device tested |
 
-No required check failed in those runs. Downloaded artifact archives matched their GitHub SHA-256 digests. The actual IPA passed an independent package recheck and Mach-O inspection: arm64, iOS 26.0 minimum / SDK 26.2, exact App Group entitlement, no fixture-host markers, logging/network imports or runtime URLs. The XML entitlement DTD URL is signature metadata, not a network request. CI verified the ad-hoc signature before and after packaging; there is no embedded provisioning profile.
+No required check failed in the main run. Earlier final PR #2 artifact archives matched their GitHub SHA-256 digests. The actual IPA passed an independent package recheck and Mach-O inspection: arm64, iOS 26.0 minimum / SDK 26.2, exact App Group entitlement, no fixture-host markers, logging/network imports or runtime URLs. The XML entitlement DTD URL is signature metadata, not a network request. CI verified the ad-hoc signature before and after packaging; there is no embedded provisioning profile.
 
 The prior iPad `navigation-passed` timeout was reentrant navigation restoration inside UIKit's Search dismissal callback. Restoration now waits until the callback returns, with a regression asserting callback depth is zero. Query/model filter, selection and same-controller restoration remain required. A later push run at `bd51298` exposed intermittent iPad Search activation before its navigation controller appeared, although the matching PR run passed. Search now keeps an activation request until native `viewDidAppear` and verifies the selected controller/window before activation; rapid entry and real presentation readiness remain asserted. No state or deadline was weakened.
 
@@ -36,10 +36,10 @@ On Linux or macOS, with Python 3, Git, Bash, zip and unzip:
 ```sh
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -p 'test_*.py' -v
 python3 scripts/privacy_audit.py
-bash -n build.sh scripts/sources.sh tests/run_all_tests.sh tests/run_scan_ui_tests.sh
+bash -n build.sh scripts/sources.sh tests/run_all_tests.sh tests/run_scan_ui_tests.sh tests/run_icon_tests.sh
 ```
 
-The current 47-test suite includes 19 source/package checks, seven POSIX build-pipeline methods, seven verified-baseline extraction methods and 14 toolchain-preflight methods. The earlier main run executed 42 tests; the current total also includes the four inventory-timeout regressions and completed-state removal coverage. Pipeline tests use command doubles for Apple tools; they do not replace native validation. Windows can run the source/package subset with `python -m unittest discover -s tests -p test_charony.py`; run POSIX fixtures in Cloud or macOS.
+The current 55-test suite includes the retained 47 checks plus four compiled-icon refusal tests and four actual-executable manifest tests. All 55 pass locally on Linux. The original 47 comprise 19 source/package checks, seven POSIX build-pipeline methods, seven verified-baseline extraction methods and 14 toolchain-preflight methods. The earlier main run executed 42 tests; the current total also includes the four inventory-timeout regressions and completed-state removal coverage. Pipeline tests use command doubles for Apple tools; they do not replace native validation. Windows can run the source/package subset with `python -m unittest discover -s tests -p test_charony.py`; run POSIX fixtures in Cloud or macOS.
 
 On macOS with Xcode 26.2 selected:
 
@@ -47,9 +47,10 @@ On macOS with Xcode 26.2 selected:
 export DEVELOPER_DIR=/Applications/Xcode_26.2.app/Contents/Developer
 python3 scripts/ci_preflight.py --simulator
 bash build.sh
+bash tests/run_icon_tests.sh
 ```
 
-`build.sh` runs the native and portable suites, strict iOS checks, source/binary audits, asset compilation, ad-hoc signing and package verification. It writes `charony.ipa` only after the build gates pass. `CHARONY_FINAL_IPA` may select an output path whose parent already exists. Failure preserves an existing final artifact.
+`build.sh` runs the native and portable suites, strict iOS checks, source/binary audits, layered-icon compilation/catalog auditing, ad-hoc signing and package verification. It writes `charony.ipa` only after the build gates pass. `CHARONY_FINAL_IPA` may select an output path whose parent already exists. Failure preserves an existing final artifact.
 
 To run host/syntax checks separately, use `bash tests/run_all_tests.sh`. To recheck an IPA's structure and metadata, use `python3 scripts/verify_ipa.py path/to/charony.ipa`. This Python check alone does not verify an Apple signature.
 
@@ -60,7 +61,7 @@ To run host/syntax checks separately, use `bash tests/run_all_tests.sh`. To rech
 | Job | Environment | Required work |
 | --- | --- | --- |
 | `upstream-baseline` | `macos-26-intel`, at least four active CPUs | Verify Xcode/SDKs, verify pinned stable source, run unchanged upstream tests |
-| `charony` | Arm64 `macos-26`, at least two active CPUs | Native/portable tests, strict iOS build, privacy, assets, signature/entitlements, IPA, disposable simulator |
+| `charony` | Arm64 `macos-26`, at least two active CPUs | Native/portable tests, strict iOS build, privacy, native icon compilation/renders, signature/entitlements, IPA/provenance, disposable simulator |
 
 Both jobs require `/Applications/Xcode_26.2.app/Contents/Developer` and iOS 26.2 SDKs. Simulator preflight requires the iOS 26.2 runtime and iPhone 17 / iPad Pro 13-inch M5 (16 GB) device types. Required UIKit fixtures run on both in Light and Dark, with the simulator set to its largest accessibility text size. It records `toolchain.json` and fails on missing or mismatched tooling. A timed-out read-only CoreSimulator inventory query is retried once with the same 60-second bound. A second timeout, nonzero command result or invalid inventory still fails; tests and mutation commands are not retried by this setup helper. The unchanged upstream interruption fixture needs two workers from half the active CPUs; Charony's corresponding fixture selects existing parallel mode without changing its recovery assertions.
 
@@ -86,13 +87,13 @@ The Charony job requires baseline success. There are no allowed-failure steps. C
 
 - `upstream-baseline-diagnostics`: selected baseline/preflight logs
 - `charony-validation-diagnostics`: build, native, Python and simulator evidence
-- `charony-development-unverified-on-device`: development IPA, uploaded only after validation succeeds
+- `charony-development-unverified-on-device`: development IPA, `charony-build.json` and `charony.ipa.sha256`, uploaded only after all validation succeeds
 
 Artifacts are retained for 14 days. Selected diagnostics are uploaded even on failure; hidden result/log paths are included. Download needed evidence before expiry. Preserve the run URL, tested SHA, toolchain record, conclusions and remaining gaps when reporting results.
 
 ## Simulator execution
 
-The required UIKit harness exercises production controllers, confirmation handlers and mutation engines with disposable simulator containers. It runs on pushes, pull requests and manual dispatch. No screenshot capture job, gallery or image artifact is required.
+The required UIKit harness exercises production controllers, confirmation handlers and mutation engines with disposable simulator containers. It runs on pushes, pull requests and manual dispatch. No UI screenshot capture job or gallery is required. Focused native icon renders are build-validation evidence, separate from UI galleries.
 
 ```sh
 WQ_SIMULATOR_UDID=YOUR_DISPOSABLE_BOOTED_SIMULATOR bash tests/run_scan_ui_tests.sh
@@ -112,16 +113,26 @@ Typography fixtures inspect actual rendered name/identifier/size labels at acces
 
 [docs/SAFETY.md](docs/SAFETY.md) records the destructive-operation model, review fixes and all 21 original portable-test dispositions. Counts alone do not establish equivalent coverage.
 
+## Native icon evidence
+
+The editable `icons/AppIcon.icon` project contains three separate SVG layers/groups. [Native toolchain run 44782476714](https://github.com/micknorj/charony/actions/runs/44782476714) passed on Intel macOS with Xcode 26.2 / Icon Composer 1.2: `actool` accepted the document and generated native vector groups, lighting effects and Light/Dark/tintable image stacks. Apple `ictool` rendered Default, Dark, Clear Light/Dark and Tinted appearances. The native AppKit regression verified dimensions and visible craters after correcting front-to-back layer order. The document/renderer interface and a strict test-helper type error were corrected without relaxing compiler flags.
+
+The permanent required job renders all six explicit renditions, including Clear rather than treating a zero-strength tinted preview as equivalent. `verify_icon.py` rejects missing vectors, flattened composites, missing modes/groups or lost native moon lighting. Pipeline failure injection also proves a flattened catalog cannot replace the previous final IPA. Apple's generated compatibility PNGs accompany the native catalog; the old PNG source and temporary investigation workflow are removed.
+
+Simulator fixtures compile/install this same project and check icon metadata/registration under actual Light/Dark simulator settings. They do not simulate every Home Screen customization choice. Actual iOS 27 Clear/tint selection, wallpaper/material interaction and appearance on the target iPhone remain device checks. No Icon Composer GUI was opened in this Linux workspace; the native document was parsed, compiled and rendered by Apple's tools on macOS.
+
+CI records the clean checkout revision/tree and actual IPA, executable and catalog hashes in `charony-build.json`. The executable inspector requires arm64/device-iOS/minimum 26.0, exact source App Group, ad-hoc flags and no fixture markers/profile. This is structural inspection; native `codesign` gates provide cryptographic verification. The manifest records CI build context and cannot independently infer the provenance of an arbitrary IPA supplied later. The source checksum applies before private re-signing.
+
 ## Device verification
 
-Physical verification is maintainer-controlled. The intended target is an iPhone 11 Pro on iOS 27.2.1, build `24B156`; it has not been tested with Charony. That exact build passes the retained patched-build predicate in a regression fixture. This checks the guard decision, not hardware access or signing.
+Use the ordered [Windows signing and strictly read-only first-session guide](docs/INSTALL_WINDOWS.md) before physical testing. Physical verification is maintainer-controlled. The intended target is an iPhone 11 Pro on iOS 27.2.1, build `24B156`; it has not been tested with Charony. That exact build passes the retained patched-build predicate in a regression fixture. This checks the guard decision, not hardware access or signing.
 
 1. Review the final re-signed bundle ID, App Group entitlement and signature. The development values are `io.github.micknorj.charony` and `group.io.github.micknorj.charony`; the signer may assign a different group. Runtime must select the signer's actual usable group.
 2. Begin read-only: launch, verify group/access setup, accessible-app listing, inaccessible-app hiding, icons and size measurement. Check current permission failures and conditional Reset Access Cache.
 3. Verify refresh, pause/resume, background/foreground, interrupted scans, restart recovery and absence of completed-result caching.
 4. Check bottom tab/search placement, keyboard/touch interaction, Light/Dark appearance, filters, confirmation/cancel, VoiceOver, smaller text sizes and the normal-size cap on supported iOS/iPad layouts. Programmatic simulator success is not complete interaction coverage.
 5. Test deletion only on an expendable app with disposable data, preferably on a spare supported device. Check exact scope, preserved roots/unrelated files, no backups, cancellation where supported, changed identity, failure reporting and repeat behavior. Never test by deleting live Safari or Messages data.
-6. Verify real asset appearances after layered Icon Composer work is complete. Do not infer Light/Dark/Clear/Tinted icon support from flat PNG compilation.
+6. Verify actual Home Screen Default/Dark/Clear/Tinted choices on the device. Native tool renders do not prove the target OS's wallpaper/material behavior.
 
 The intended Windows signing route is [AltStore Classic with AltServer](https://faq.altstore.io/altstore-classic/how-to-install-altstore-windows). Follow its current Windows/iTunes/iCloud, device-trust, Wi-Fi sync and Developer Mode instructions. With a free Apple account, provisioning expires after seven days; refresh before expiry with AltServer available. Apple documents up to three installed apps per device and ten App IDs for Personal Teams; AltStore itself occupies an app slot. See [Apple membership limits](https://developer.apple.com/support/compare-memberships/).
 
@@ -132,7 +143,7 @@ The upstream stable README says AltStore/SideStore can create the required group
 Releases require explicit maintainer approval and manual publication.
 
 - Obtain independent destructive-code review and pass all current baseline, safety, privacy, scan, UI and packaging gates
-- Complete layered icon work and record actual device/signing evidence and supported builds
+- Pass native icon gates and record actual icon/device/signing evidence and supported builds
 - Keep unsupported patched iOS versions and partial-deletion limits visible
 - Select and verify the version/build metadata; build from the reviewed source revision
 - Review the final re-signed signature, App Group entitlement, metadata and package contents

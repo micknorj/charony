@@ -25,13 +25,13 @@ Charony uses the existing [worse_query](https://github.com/forcequitOS/worse_que
 | 27.0–27.3 beta 1 | Upstream access range; Charony device behavior unverified |
 | 27.3 beta 2 and later | Unsupported; worse_query was patched |
 
-Native builds and disposable iPhone 17 / iPad Pro simulator fixtures passed [GitHub Actions validation](https://github.com/micknorj/charony/actions/runs/44763475557) on iOS 26.2 in Light and Dark. No physical iPhone has been tested with this implementation. See [testing and verification](TESTING.md).
+Native builds and disposable iPhone 17 / iPad Pro simulator fixtures passed [GitHub Actions validation](https://github.com/micknorj/charony/actions/runs/44777257355) on iOS 26.2 in Light and Dark. No physical iPhone has been tested with this implementation. See [testing and verification](TESTING.md).
 
 ## Installation
 
-There is no published release IPA. Passing validation runs provide a `charony-development-unverified-on-device` artifact on the [Actions page](https://github.com/micknorj/charony/actions).
+There is no published release IPA. Passing validation runs provide a `charony-development-unverified-on-device` artifact on the [Actions page](https://github.com/micknorj/charony/actions), including source metadata and SHA-256 checksum.
 
-The development IPA is ad-hoc signed and requires re-signing before installation. The intended Windows route is AltStore Classic with a free Apple account. The final signer must preserve a usable App Group entitlement; this route and physical sandbox access remain unverified. See the [device checklist](TESTING.md#device-verification) before installing on a primary iPhone.
+The development IPA is ad-hoc signed and requires re-signing before installation. The intended Windows route is AltStore Classic with a free Apple account. The final signer must preserve a usable App Group entitlement; this route and physical sandbox access remain unverified. Use the [Windows signing and read-only checklist](docs/INSTALL_WINDOWS.md) before first launch. A copied entitlement string is not Apple-authorized provisioning.
 
 ## Usage
 
@@ -58,7 +58,7 @@ iOS system diagnostics and Apple or third-party signing services operate indepen
 - Deletion is permanent and may finish partially after interruption or failure
 - Physical access, final sideloaded signing and destructive behavior remain unverified
 - iOS 27 interface behavior, touch interaction and accessibility need further verification
-- The flat development moon icon compiles; layered Light, Dark, Clear and Tinted appearances remain incomplete
+- The editable layered moon icon has native Default/Dark/Clear/Tinted renders; actual iOS 27 Home Screen appearance remains unverified
 
 ## Development
 
@@ -72,6 +72,8 @@ bash build.sh
 
 The build runs native and portable tests, strict iOS compilation, privacy audits, asset compilation, ad-hoc signing and IPA validation before producing `charony.ipa`. No Apple credentials are required.
 
+- [Windows installation and first read-only test](docs/INSTALL_WINDOWS.md)
+- [Editable icon and native rendering](icons/README.md)
 - [Testing, build commands and release checklist](TESTING.md)
 - [Architecture and retained shared code](ARCHITECTURE.md)
 - [Safety model and test coverage](docs/SAFETY.md)

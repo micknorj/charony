@@ -24,4 +24,4 @@ The test-only upstream safety fixture preserves nine unmodified functions from W
 
 ## Artwork
 
-The development moon artwork was generated for Charony. Layered Icon Composer artwork remains incomplete.
+The original layered moon artwork and editable SVG/Icon Composer project were created for Charony. Apple's tools provide the native Liquid Glass materials and compiled appearance variants. The superseded flat development artwork is no longer included.

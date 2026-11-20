@@ -98,7 +98,7 @@ def main():
         raise ValueError(f'Pinned {DEVELOPER_DIR} is required. Installed Xcodes: {installed}')
     if os.environ.get('WQ_SKIP_IOS_CHECK', '0') != '0':
         raise ValueError('CI must run the strict iOS checks')
-    for tool in ['bash', 'git', 'python3', 'zip', 'unzip', 'codesign', 'plutil', 'sips', 'xcrun', 'xcodebuild', 'sysctl']:
+    for tool in ['bash', 'git', 'python3', 'zip', 'unzip', 'codesign', 'plutil', 'xcrun', 'xcodebuild', 'sysctl']:
         if not shutil.which(tool):
             raise ValueError(f'Required CI command is unavailable: {tool}')
     minimum = plistlib.loads((ROOT / 'Info.plist').read_bytes())['MinimumOSVersion']

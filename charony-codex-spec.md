@@ -1,6 +1,6 @@
 # Charony implementation specification
 
-This specification defines the approved product requirements. [TESTING.md](TESTING.md) records actual verification. Initial native CI passed; physical-device behavior and layered icon work remain unverified.
+This specification defines the approved product requirements. [TESTING.md](TESTING.md) records actual verification. Merged-main native CI passed. The editable layered icon is verified with Apple tools; physical-device behavior and final signing remain unverified.
 
 ## Source and licensing
 
@@ -77,8 +77,8 @@ The intended physical validation target is an iPhone 11 Pro on iOS 27.2.1. The m
 - No Settings page or gear icon
 - Show Reset Access Cache only for a detected recoverable access failure
 - Circular Charon-inspired moon icon with subtle surface detail and no lettering
-- Target layered Icon Composer Liquid Glass Light, Dark, Clear and Tinted appearances; verify actual asset compilation and device appearance
-- Mark layered work incomplete until verified; flat development PNGs do not establish those variants
+- Use the editable layered Icon Composer Liquid Glass project for Default/Light, Dark, Clear and Tinted appearances; require native compilation/renders and record device appearance separately
+- Do not substitute flattened sources for native layers; generated compatibility PNGs do not replace the layered catalog
 - Use Charony bundle/product metadata and validate a usable final App Group instead of depending on upstream signing identifiers
 
 ## Feature removal
@@ -113,14 +113,19 @@ Maintain focused positive and negative coverage for:
 
 GitHub Actions must run relevant native macOS tests, strict Objective-C iOS compilation/linking, disposable Simulator fixtures, source/binary privacy audits, IPA/package/bundle metadata validation, App Group/signature validation and asset/icon compilation. Check actual pinned Xcode/SDK/runtime availability and fail on missing tooling. Do not embed signing credentials in source or artifacts. An unrun/skipped check remains unverified.
 
-Screenshot galleries, exhaustive capture hosts and screenshot-only CI jobs are outside scope. Preserve their useful functional and safety assertions in required native tests; do not retain generated screenshots or ZIPs in source control. Layered artwork is a separate task.
+Screenshot galleries, exhaustive capture hosts and screenshot-only CI jobs are outside scope. Preserve their useful functional and safety assertions in required native tests; do not retain generated screenshots or ZIPs in source control. Native icon compilation and focused appearance renders belong in the required validation job; they are not a UI screenshot gallery.
 
 Keep [TESTING.md](TESTING.md) accurate with commands, platform, outcomes, evidence and unresolved requirements. Simulator fixtures cannot validate real sandbox tokens, supported protected-app access or final sideloaded signing. Begin physical checks read-only; destructive validation must use an expendable app with disposable data, preferably on a spare supported device. If that is unavailable, keep destructive-device behavior unverified. Require independent destructive-code review before primary-phone use.
 
-Critical deletion, privacy, recovery or packaging failures block an IPA release. Complete layered icon work and device gates before claiming release readiness. CI success alone does not establish destructive safety on a primary iPhone.
+Critical deletion, privacy, recovery or packaging failures block an IPA release. Complete actual icon appearance and device/signing gates before claiming release readiness. CI success alone does not establish destructive safety on a primary iPhone.
 
 ## Repository workflow
 
 [AGENTS.md](AGENTS.md) defines repository-specific GitHub permissions, mandatory local identity and development procedures. Normal work uses development branches and pull requests targeting `main`. Never modify `main` directly, force-push, rewrite history, delete/recreate the repository, bypass checks or commit secrets. The one-time history exception is complete and expired. Merges, remote branch deletion and release publication require explicit maintainer approval; do not enable automatic merging, releasing or deployment. Authorization does not extend to other projects or external accounts/infrastructure.
 
 Keep the README concise and place technical detail in architecture, safety and testing documents. Preserve notices and accurate build/install, privacy, compatibility and release limitations. Report actual results, branch/PR/commit, remaining risks and approval requirements in the conversation for the maintainer's separate planning review. Do not add temporary handoff diaries to the repository or assume automatic communication between conversations.
+
+
+## First installation
+
+Prepare a downloadable CI development IPA with source revision/tree and actual package checksum, architecture, deployment target and embedded App Group evidence. Keep signing credentials out of Git/CI. Research the Windows signer's real Apple provisioning flow; do not equate entitlement strings with authorization. Before first launch, verify an Apple-issued profile and matching signed/installed App Group. A refusal or unavailable verification is a blocker; do not remove the entitlement or bypass Apple signing. [Windows preparation](docs/INSTALL_WINDOWS.md) defines the credential-private procedure and strictly read-only first session.

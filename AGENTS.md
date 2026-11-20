@@ -43,6 +43,6 @@ python3 scripts/privacy_audit.py
 
 The macOS workflow must retain unchanged upstream tests, native safety fixtures, strict iOS compilation/linking, simulator checks, source/binary privacy audits, asset compilation and IPA/metadata/signature/App Group validation. Keep workflow permissions read-only and development signing ad-hoc. Do not add Apple credentials or signing secrets.
 
-Keep actual evidence and open gates in [TESTING.md](TESTING.md). A CI pass does not validate physical access, final sideloaded signing or destructive safety on a primary iPhone. Layered icon appearances remain a separate gate.
+Keep actual evidence and open gates in [TESTING.md](TESTING.md). A CI pass does not validate physical access, final sideloaded signing or destructive safety on a primary iPhone. Retain native layered-icon compilation/render tests and record actual device appearance separately.
 
 Report branch, PR URL, commit SHA, actual CI/test results, fixes, remaining risks and approval requirements in the conversation. Do not commit temporary handoff reports or claim automatic communication with a separate planning conversation.
