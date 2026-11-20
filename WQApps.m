@@ -247,6 +247,7 @@ static BOOL wq_dir_size_cancellable(NSString *dir, NSString *taskID, WQScanCance
     _scanTask = [WQScanTask taskNamed:@"apps"];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(scanTaskChanged:) name:WQScanTaskChangedNotification object:_scanTask];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(applicationDidBecomeActive:) name:UIApplicationDidBecomeActiveNotification object:nil];
+    [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(contentSizeChanged:) name:UIContentSizeCategoryDidChangeNotification object:nil];
     [self scanTaskChanged:nil];
     if (!_scanTask.running && !_scanTask.userPaused && (!_scanTask.result || _scanTask.interrupted)) {
         _resumeScan = _scanTask.interrupted;
@@ -273,6 +274,12 @@ static BOOL wq_dir_size_cancellable(NSString *dir, NSString *taskID, WQScanCance
         footer.frame = frame;
         self.tableView.tableFooterView = footer;
     }
+}
+
+- (void)contentSizeChanged:(NSNotification *)notification
+{
+    [self.tableView reloadData];
+    [self.view setNeedsLayout];
 }
 
 // Pull to refresh: rescan the containers instead of reusing the shared scan,
@@ -534,7 +541,8 @@ static BOOL wq_dir_size_cancellable(NSString *dir, NSString *taskID, WQScanCance
     UIListContentConfiguration *content = [UIListContentConfiguration subtitleCellConfiguration];
     content.text = app.name;
     content.secondaryText = [NSString stringWithFormat:@"%@ · %@%@", app.bundleID, app.sizeKnown ? wq_size_text(app.bytes) : @"size incomplete", app.installState == WQInstallOffloaded ? @" · offloaded" : @""];
-    content.secondaryTextProperties.numberOfLines = 2;
+    content.secondaryTextProperties.numberOfLines =
+        UIContentSizeCategoryIsAccessibilityCategory(self.traitCollection.preferredContentSizeCategory) ? 0 : 2;
     content.image = wq_app_icon(app.bundleID);
     content.imageProperties.maximumSize = CGSizeMake(32, 32);
     cell.contentConfiguration = content;

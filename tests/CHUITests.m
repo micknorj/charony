@@ -229,6 +229,9 @@ static void runAppListStateFixtures(UIWindow *window)
     UITableViewCell *cell = [controller tableView:controller.tableView cellForRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]];
     UIListContentConfiguration *content = (UIListContentConfiguration *)cell.contentConfiguration;
     check([content.text isEqualToString:@"Read-only Fixture"], @"refresh-row-renders-existing-model");
+    check(content.secondaryTextProperties.numberOfLines ==
+          (UIContentSizeCategoryIsAccessibilityCategory(controller.traitCollection.preferredContentSizeCategory) ? 0 : 2),
+          @"app-identifiers-and-size-wrap-at-accessibility-sizes");
     [window setNeedsLayout];
     [window layoutIfNeeded];
     [controller.tableView layoutIfNeeded];
