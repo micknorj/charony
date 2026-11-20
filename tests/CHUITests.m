@@ -278,7 +278,18 @@ static void runCacheSearchConfirmationFixture(UITabBarController *tabs, WQCacheC
         [caches confirmClean];
         awaitUIKitState(^BOOL { return [caches.presentedViewController.title isEqualToString:@"Clean caches?"] && !caches.presentedViewController.isBeingPresented; },
             150, @"cache-confirmation-is-reachable-from-active-search", diagnostics, ^{
-            check(tabs.selectedTab == tabs.tabs[1] && [[item valueForKey:@"selected"] boolValue] && [search.searchBar.text isEqualToString:@"fixture"], @"search-confirmation-restores-same-cache-controller-query-and-selection");
+            NSDictionary *context = @{@"selectedTab":tabs.selectedTab.identifier ?: @"nil", @"expectedTab":tabs.tabs[1].identifier,
+                @"selected":[item valueForKey:@"selected"], @"query":search.searchBar.text ?: @"nil",
+                @"modelQuery":[caches valueForKey:@"query"] ?: @"nil", @"searchActive":@(search.active),
+                @"tabController":NSStringFromClass(caches.tabBarController.class) ?: @"nil",
+                @"windowRoot":NSStringFromClass(caches.view.window.rootViewController.class) ?: @"nil",
+                @"sameItem":@([[caches valueForKey:@"items"] firstObject] == item),
+                @"contextRootStillAttached":@(((CHTabs *)tabs).searchRoot == caches)};
+            NSString *path = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject stringByAppendingPathComponent:@"ui-search-context.log"];
+            [[NSJSONSerialization dataWithJSONObject:context options:NSJSONWritingPrettyPrinted error:nil] writeToFile:path atomically:YES];
+            check(tabs.selectedTab == tabs.tabs[1], @"cache-confirmation-restores-the-original-tab");
+            check([[item valueForKey:@"selected"] boolValue], @"cache-confirmation-retains-manual-selection");
+            check([search.searchBar.text isEqualToString:@"fixture"], @"cache-confirmation-retains-the-query");
             [caches dismissViewControllerAnimated:NO completion:^{
                 [caches tableView:caches.tableView didSelectRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]];
                 search.searchBar.text = @"";
