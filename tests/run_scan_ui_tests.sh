@@ -24,7 +24,7 @@ xcrun simctl install "$WQ_SIMULATOR_UDID" "$APP"
 DATA=$(xcrun simctl get_app_container "$WQ_SIMULATOR_UDID" "$BUNDLE" data)
 retain_diagnostics() {
     local diagnostic
-    for diagnostic in search-navigation ui-layout ui-phase; do
+    for diagnostic in search-navigation ui-layout ui-phase ui-exception; do
         if [[ -f "$DATA/Documents/$diagnostic.log" ]]; then
             cp "$DATA/Documents/$diagnostic.log" "$OUT/$diagnostic.log"
             cat "$OUT/$diagnostic.log"
@@ -57,7 +57,7 @@ for APPEARANCE in light dark; do
     # Markers and diagnostics must belong to this run, not the previous profile.
     rm -f -- "$DATA/Documents/ready-for-background" "$DATA/Documents/background-paused" \
         "$DATA/Documents/ready-to-terminate" "$DATA/Documents/recovery-passed" \
-        "$DATA/Documents/search-navigation.log" "$DATA/Documents/ui-layout.log" "$DATA/Documents/ui-phase.log" "$DATA/Documents/FAIL-"*
+        "$DATA/Documents/search-navigation.log" "$DATA/Documents/ui-layout.log" "$DATA/Documents/ui-phase.log" "$DATA/Documents/ui-exception.log" "$DATA/Documents/FAIL-"*
     LAUNCH=$(SIMCTL_CHILD_CH_EXPECTED_APPEARANCE="$APPEARANCE" xcrun simctl launch \
         --stdout="$OUT/$APPEARANCE-stdout.log" --stderr="$OUT/$APPEARANCE-stderr.log" "$WQ_SIMULATOR_UDID" "$BUNDLE")
     printf '%s\n' "$LAUNCH"

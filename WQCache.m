@@ -365,6 +365,8 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
     search.searchResultsUpdater = self;
     search.obscuresBackgroundDuringPresentation = NO;
     search.searchBar.placeholder = @"Search caches";
+    search.searchBar.maximumContentSizeCategory = UIContentSizeCategoryLarge;
+    search.searchBar.searchTextField.font = wq_font(UIFontTextStyleBody, self.traitCollection);
     _contextSearchController = search;
     self.definesPresentationContext = YES;
     self.refreshControl = [UIRefreshControl new];
@@ -440,8 +442,9 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
 
 - (NSString *)statusText
 {
-    NSString *status = _scanTask.persistenceFailed ? @"Could not save scan state. Keep charony open." : _status;
+    NSString *status = _status;
     if (!status.length && _scanTask.interrupted) status = @"Scan interrupted. Resume to continue.";
+    if (_scanTask.persistenceFailed) status = status.length ? [status stringByAppendingString:@"\nCould not save scan state. Keep charony open."] : @"Could not save scan state. Keep charony open.";
     if (_result.length && status.length) return [NSString stringWithFormat:@"%@\n%@", _result, status];
     return _result.length ? _result : status;
 }
@@ -827,6 +830,7 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
     }
     WQScanCancellation *cancellation = [WQScanCancellation new];
     if (!wq_begin_mutation(self)) return;
+    _result = nil;
     _cleanCancellation = cancellation;
     _cleaning = YES;
     [self updateButtons];

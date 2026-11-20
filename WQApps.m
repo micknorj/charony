@@ -191,10 +191,9 @@ static BOOL wq_dir_size_cancellable(NSString *dir, NSString *taskID, WQScanCance
 
 - (NSString *)statusText
 {
-    if (_scanTask.persistenceFailed) return @"Could not save scan state. Keep charony open.";
-    if (_status.length) return _status;
-    if (_scanTask.interrupted) return @"Scan interrupted. Resume to continue.";
-    return nil;
+    NSString *status = _status.length ? _status : (_scanTask.interrupted ? @"Scan interrupted. Resume to continue." : nil);
+    if (_scanTask.persistenceFailed) return status.length ? [status stringByAppendingString:@"\nCould not save scan state. Keep charony open."] : @"Could not save scan state. Keep charony open.";
+    return status;
 }
 
 - (void)updateButtons
@@ -226,6 +225,8 @@ static BOOL wq_dir_size_cancellable(NSString *dir, NSString *taskID, WQScanCance
     search.searchResultsUpdater = self;
     search.obscuresBackgroundDuringPresentation = NO;
     search.searchBar.placeholder = WQLocalizedNullable(@"Search apps");
+    search.searchBar.maximumContentSizeCategory = UIContentSizeCategoryLarge;
+    search.searchBar.searchTextField.font = wq_font(UIFontTextStyleBody, self.traitCollection);
     _contextSearchController = search;
     self.definesPresentationContext = YES;
     self.refreshControl = [UIRefreshControl new];

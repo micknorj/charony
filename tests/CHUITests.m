@@ -30,6 +30,13 @@ static void phase(NSString *name)
     [NSFileManager.defaultManager createDirectoryAtPath:documents withIntermediateDirectories:YES attributes:nil error:nil];
     [name writeToFile:[documents stringByAppendingPathComponent:@"ui-phase.log"] atomically:YES encoding:NSUTF8StringEncoding error:nil];
 }
+static void fixtureException(NSException *exception)
+{
+    marker(@"FAIL-unhandled-exception");
+    NSString *path = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject stringByAppendingPathComponent:@"ui-exception.log"];
+    [[NSString stringWithFormat:@"%@: %@\n%@", exception.name, exception.reason, [exception.callStackSymbols componentsJoinedByString:@"\n"]]
+        writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:nil];
+}
 static void check(BOOL condition, NSString *name)
 {
     if (!condition) { marker([@"FAIL-" stringByAppendingString:name]); abort(); }
@@ -112,15 +119,19 @@ static void runTypographyFixtures(UIWindow *window, UITableViewController *contr
 // Rescanning is supplied by fixtures. The real batch mutation implementation runs.
 @interface CHFixtureCaches : WQCacheCleanerViewController
 @property (nonatomic) NSUInteger scanRequests;
+@property (nonatomic) BOOL fixtureAppeared;
 @end
 @implementation CHFixtureCaches
 - (void)scan { self.scanRequests++; }
+- (void)viewDidAppear:(BOOL)animated { [super viewDidAppear:animated]; self.fixtureAppeared = YES; }
 @end
 @interface CHFixtureApps : WQAppsViewController
 @property (nonatomic) NSUInteger scanRequests;
+@property (nonatomic) BOOL fixtureAppeared;
 @end
 @implementation CHFixtureApps
 - (void)scan { self.scanRequests++; }
+- (void)viewDidAppear:(BOOL)animated { [super viewDidAppear:animated]; self.fixtureAppeared = YES; }
 @end
 @interface WQAppsViewController (CHPresentationFixtures)
 - (void)presentPendingClearResult;
@@ -207,6 +218,7 @@ static void runActiveSearchNavigationFixtures(UITabBarController *tabs, WQAppsVi
     [tabs.delegate tabBarController:tabs didSelectTab:search previousTab:previous];
     awaitUIKitState(searchReady, 150, @"search-is-actually-presented", diagnostics, ^{
         check(searchReady(), @"search-is-actually-presented");
+        check(controller.searchBar.searchTextField.font.pointSize <= 17.01, @"native-search-field-text-is-capped-at-normal-size");
         controller.searchBar.text = @"no-match";
         [apps updateSearchResultsForSearchController:controller];
         check([apps.tableView numberOfRowsInSection:0] == 0, @"apps-search-filters-current-context");
@@ -286,13 +298,14 @@ static void checkRefreshControls(UITableViewController *controller)
     check([UIApplication.sharedApplication sendAction:refresh.action to:refresh.target from:refresh forEvent:nil], @"native-refresh-control-invokes-its-real-action");
     check([[controller valueForKey:@"scanRequests"] unsignedIntegerValue] == 1, @"refresh-action-reaches-the-scan-entry-point");
 }
-static void runAppListStateFixtures(UIWindow *window)
+static void runAppListStateFixtures(UIWindow *window, dispatch_block_t next)
 {
     phase(@"runAppListStateFixtures");
     CHFixtureApps *controller = [CHFixtureApps new];
     window.rootViewController = [[UINavigationController alloc] initWithRootViewController:controller];
     [window makeKeyAndVisible];
     [controller loadViewIfNeeded];
+    awaitUIKitState(^BOOL { return controller.fixtureAppeared; }, 150, @"list-fixture-has-completed-native-appearance", ^NSDictionary *{ return @{@"controller":NSStringFromClass(controller.class)}; }, ^{
     check([[visibleLabelText(controller.tableView.backgroundView) stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet] isEqualToString:@"Refresh to update"], @"initial-apps-explicit-refresh-message");
     check(![WQScanTask taskNamed:@"apps"].running, @"opening-apps-does-not-start-a-scan");
     checkRefreshControls(controller);
@@ -329,15 +342,18 @@ static void runAppListStateFixtures(UIWindow *window)
     [NSNotificationCenter.defaultCenter postNotificationName:WQScanTaskChangedNotification object:task];
     check([visibleLabelText(controller.tableView.backgroundView) containsString:@"Could not save"], @"checkpoint-failure-remains-visible-without-a-scan-date-banner");
     [task setValue:@NO forKey:@"persistenceFailed"];
+    next();
+    });
 }
 
-static void runCacheListStateFixtures(UIWindow *window)
+static void runCacheListStateFixtures(UIWindow *window, dispatch_block_t next)
 {
     phase(@"runCacheListStateFixtures");
     CHFixtureCaches *controller = [CHFixtureCaches new];
     window.rootViewController = [[UINavigationController alloc] initWithRootViewController:controller];
     [window layoutIfNeeded];
     [controller loadViewIfNeeded];
+    awaitUIKitState(^BOOL { return controller.fixtureAppeared; }, 150, @"list-fixture-has-completed-native-appearance", ^NSDictionary *{ return @{@"controller":NSStringFromClass(controller.class)}; }, ^{
     check([visibleLabelText(controller.tableView.backgroundView) containsString:@"Refresh to update"] && ![WQScanTask taskNamed:@"clean"].running, @"initial-caches-waits-for-explicit-refresh");
     checkRefreshControls(controller);
     WQScanTask *task = [WQScanTask taskNamed:@"clean"];
@@ -351,6 +367,8 @@ static void runCacheListStateFixtures(UIWindow *window)
     generation = [task beginFresh:YES cancel:^{}];
     [task finish:@{@"rows":@[], @"complete":@NO, @"note":@"Discovery incomplete. Refresh to retry."} generation:generation];
     check([visibleLabelText(controller.tableView.backgroundView) containsString:@"Discovery incomplete"], @"cache-discovery-error-remains-visible");
+    next();
+    });
 }
 
 static WQCacheItem *cacheFixture(NSString *root)
@@ -699,10 +717,12 @@ static void runCacheStopFixture(UIWindow *window, dispatch_block_t next)
     window.rootViewController = [[UINavigationController alloc] initWithRootViewController:controller];
     [controller loadViewIfNeeded];
     [controller setValue:@[first, second] forKey:@"items"];
+    [controller setValue:@"Previous cleanup outcome" forKey:@"result"];
     holdFixturePurge();
     [controller cleanItems:@[first, second] generation:[[controller valueForKey:@"scanGeneration"] unsignedIntegerValue]];
     NSDictionary *(^diagnostics)(void) = ^NSDictionary *{ return @{@"result":[controller valueForKey:@"result"] ?: @"nil"}; };
     awaitUIKitState(^BOOL { return atomic_load(&CHOperationReached); }, 150, @"cache-stop-reaches-real-purge", diagnostics, ^{
+        check(![[controller statusText] containsString:@"Previous cleanup outcome"], @"new-clean-progress-does-not-show-a-stale-success");
         [controller stopClean];
         releaseFixturePurge();
         waitForBatch(controller, 200, ^{
@@ -811,8 +831,8 @@ static void runRecoveryConsentFixtures(UIWindow *window, dispatch_block_t next)
     UIImage *neutralBook = wq_app_icon(@"com.example.uninstalled.facebook");
     UIImage *neutralMusic = wq_app_icon(@"com.example.uninstalled.music");
     check(neutralBook != nil && [UIImagePNGRepresentation(neutralBook) isEqual:UIImagePNGRepresentation(neutralMusic)], @"third-party-fallback-icons-do-not-guess-apple-services");
-    runAppListStateFixtures(self.window);
-    runCacheListStateFixtures(self.window);
+    runAppListStateFixtures(self.window, ^{
+    runCacheListStateFixtures(self.window, ^{
     NSDictionary *row = @{@"name": @"Disposable Fixture", @"bundleID": @"com.example.fixture", @"container": @"/fixture", @"containerPath": @"/fixture", @"hasAccess": @YES, @"hasIdentity": @YES, @"bytes": @123, @"cacheBytes": @123, @"limited": @YES};
     for (NSString *name in @[@"apps", @"clean"]) {
         WQScanTask *task = [WQScanTask taskNamed:name];
@@ -843,7 +863,7 @@ static void runRecoveryConsentFixtures(UIWindow *window, dispatch_block_t next)
         UINavigationController *cacheNav = (UINavigationController *)tabs.selectedViewController;
         WQCacheCleanerViewController *caches = (WQCacheCleanerViewController *)cacheNav.topViewController;
         [caches loadViewIfNeeded];
-        check([caches.tableView numberOfRowsInSection:1] == 1, @"apps-query-does-not-filter-caches");
+        check([caches.tableView numberOfRowsInSection:0] == 1, @"apps-query-does-not-filter-caches");
         NSArray *items = [caches valueForKey:@"items"];
         check([caches valueForKey:@"status"] == nil, @"empty-completed-cache-note-is-normalized");
         [caches setValue:@"Freed fixture data." forKey:@"result"];
@@ -917,6 +937,8 @@ static void runRecoveryConsentFixtures(UIWindow *window, dispatch_block_t next)
         });
         });
     });
+    });
+    });
 }
 - (void)beginLifecycleValidation
 {
@@ -963,5 +985,5 @@ static void runRecoveryConsentFixtures(UIWindow *window, dispatch_block_t next)
 @end
 int main(int argc, char *argv[])
 {
-    @autoreleasepool { return UIApplicationMain(argc, argv, nil, NSStringFromClass(CHFixtureDelegate.class)); }
+    @autoreleasepool { NSSetUncaughtExceptionHandler(fixtureException); return UIApplicationMain(argc, argv, nil, NSStringFromClass(CHFixtureDelegate.class)); }
 }

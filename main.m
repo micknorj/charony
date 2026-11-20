@@ -154,7 +154,9 @@ static BOOL CHConfirmFullScan(NSString *what, int64_t ids, double seconds)
     if (failure) {
         UIViewController *blocked = [UIViewController new];
         blocked.view.backgroundColor = UIColor.systemBackgroundColor;
+        blocked.view.maximumContentSizeCategory = UIContentSizeCategoryLarge;
         UILabel *message = [UILabel new];
+        message.maximumContentSizeCategory = UIContentSizeCategoryLarge;
         message.font = wq_font(UIFontTextStyleBody, self.window.traitCollection);
         message.adjustsFontForContentSizeCategory = YES;
         message.numberOfLines = 0;
