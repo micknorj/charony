@@ -96,6 +96,8 @@ gh workflow run validate.yml --repo micknorj/charony --ref YOUR_DEVELOPMENT_BRAN
 
 Download `charony-fixture-ui-gallery` for individually named PNGs, `INDEX.md`, an offline HTML gallery, provenance manifest and ZIP. Generated images stay in ignored `.work` output and are not committed. The regular lifecycle harness remains a required check on every push and pull request; the longer gallery runs only on manual dispatch.
 
+The completed fixture gallery at commit `66b7238` exposed a floating Apps footer, unreadable horizontal cache labels at the largest accessibility size and stale selection guidance. Follow-up fixes and regressions remain subject to their own commit's validation. On iPad, native UIKit places tabs and Search at the top; this differs from the specification's literal bottom placement and remains an interface review item. The first phone Search capture can include an OS keyboard introduction despite simulator preferences; later captures show the keyboard. No overlay is removed from the PNGs.
+
 ## Safety coverage
 
 Native fixtures cover access-cache recovery, no-follow path checks, purge boundaries, selected-app scope, identity changes, symlinks, traversal, unrelated-file preservation, cancellation, repeated operations, missing access, scan interruption and checkpoint recovery. Clearing and cleaning must create no backup artifacts.
