@@ -81,9 +81,9 @@ Verify the copied profile's CMS signature and Windows trust chain before reading
 
 ```powershell
 Add-Type -AssemblyName System.Security.Cryptography.Pkcs
-$Profile = Join-Path $Work "$ProfileUuid.mobileprovision"
+$ProvisioningProfilePath = Join-Path $Work "$ProfileUuid.mobileprovision"
 $Cms = [System.Security.Cryptography.Pkcs.SignedCms]::new()
-$Cms.Decode([IO.File]::ReadAllBytes($Profile))
+$Cms.Decode([IO.File]::ReadAllBytes($ProvisioningProfilePath))
 $Cms.CheckSignature($false) # Validate signature AND certificate trust; do not change to $true.
 $Cms.SignerInfos | ForEach-Object { $_.Certificate | Select-Object Subject, Issuer }
 [IO.File]::WriteAllBytes((Join-Path $Work 'profile.plist'), $Cms.ContentInfo.Content)

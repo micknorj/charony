@@ -115,6 +115,10 @@ Typography fixtures inspect actual rendered name/identifier/size labels at acces
 
 ## Native icon evidence
 
+Implementation revision `872689f3ebdb2afc4272fd7f87be3dd9beba89c1` passed [push 44784528773](https://github.com/micknorj/charony/actions/runs/44784528773) and [PR 44784539006](https://github.com/micknorj/charony/actions/runs/44784539006), both required jobs in both runs. All 55 portable tests, ten core native safety executables, strict compilation/linking, native icon render regression, four simulator profiles, privacy/signature/package checks and manifest generation passed. Downloaded archives matched GitHub digests; the actual IPA matched its source/hash manifest and independent Mach-O inspection. Subsequent documentation-only checks remain attached to their exact commits in PR #3.
+
+Windows guide snippets passed syntax parsing with the official Microsoft PowerShell 7.7 runtime. No Windows device/signing or Apple-account commands were executed; those gates remain open.
+
 The editable `icons/AppIcon.icon` project contains three separate SVG layers/groups. [Native toolchain run 44782476714](https://github.com/micknorj/charony/actions/runs/44782476714) passed on Intel macOS with Xcode 26.2 / Icon Composer 1.2: `actool` accepted the document and generated native vector groups, lighting effects and Light/Dark/tintable image stacks. Apple `ictool` rendered Default, Dark, Clear Light/Dark and Tinted appearances. The native AppKit regression verified dimensions and visible craters after correcting front-to-back layer order. The document/renderer interface and a strict test-helper type error were corrected without relaxing compiler flags.
 
 The permanent required job renders all six explicit renditions, including Clear rather than treating a zero-strength tinted preview as equivalent. `verify_icon.py` rejects missing vectors, flattened composites, missing modes/groups or lost native moon lighting. Pipeline failure injection also proves a flattened catalog cannot replace the previous final IPA. Apple's generated compatibility PNGs accompany the native catalog; the old PNG source and temporary investigation workflow are removed.
