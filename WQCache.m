@@ -366,6 +366,8 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
     search.obscuresBackgroundDuringPresentation = NO;
     search.searchBar.placeholder = @"Search caches";
     search.searchBar.maximumContentSizeCategory = UIContentSizeCategoryLarge;
+    search.searchBar.searchTextField.maximumContentSizeCategory = UIContentSizeCategoryLarge;
+    search.searchBar.searchTextField.adjustsFontForContentSizeCategory = YES;
     search.searchBar.searchTextField.font = wq_font(UIFontTextStyleBody, self.traitCollection);
     _contextSearchController = search;
     self.definesPresentationContext = YES;
@@ -380,6 +382,7 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
 - (void)contentSizeChanged:(NSNotification *)notification
 {
     [self updatePresentation];
+    _contextSearchController.searchBar.searchTextField.font = wq_font(UIFontTextStyleBody, self.traitCollection);
     ((UILabel *)self.navigationItem.leftBarButtonItem.customView).font = wq_font(UIFontTextStyleHeadline, self.traitCollection);
 }
 

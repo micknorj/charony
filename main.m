@@ -88,6 +88,12 @@
     self.searchNavigation.viewControllers = @[[UIViewController new]];
     self.contextNavigation.viewControllers = @[root];
 }
+- (void)didPresentSearchController:(UISearchController *)searchController
+{
+    // Search installs its text field during presentation; apply the current
+    // bounded app style after UIKit has prepared the actual field.
+    searchController.searchBar.searchTextField.font = wq_font(UIFontTextStyleBody, self.traitCollection);
+}
 - (void)didDismissSearchController:(UISearchController *)searchController
 {
     (void)searchController;

@@ -226,6 +226,8 @@ static BOOL wq_dir_size_cancellable(NSString *dir, NSString *taskID, WQScanCance
     search.obscuresBackgroundDuringPresentation = NO;
     search.searchBar.placeholder = WQLocalizedNullable(@"Search apps");
     search.searchBar.maximumContentSizeCategory = UIContentSizeCategoryLarge;
+    search.searchBar.searchTextField.maximumContentSizeCategory = UIContentSizeCategoryLarge;
+    search.searchBar.searchTextField.adjustsFontForContentSizeCategory = YES;
     search.searchBar.searchTextField.font = wq_font(UIFontTextStyleBody, self.traitCollection);
     _contextSearchController = search;
     self.definesPresentationContext = YES;
@@ -241,6 +243,7 @@ static BOOL wq_dir_size_cancellable(NSString *dir, NSString *taskID, WQScanCance
 - (void)contentSizeChanged:(NSNotification *)notification
 {
     [self updatePresentation];
+    _contextSearchController.searchBar.searchTextField.font = wq_font(UIFontTextStyleBody, self.traitCollection);
     ((UILabel *)self.navigationItem.leftBarButtonItem.customView).font = wq_font(UIFontTextStyleHeadline, self.traitCollection);
 }
 

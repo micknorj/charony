@@ -3,9 +3,30 @@
 #import "WQScanTask.h"
 #import <fcntl.h>
 
-void wq_configure_window(UIWindow *window)
+static void wq_window_text_category(UIWindow *window, UIContentSizeCategory category)
 {
     window.maximumContentSizeCategory = UIContentSizeCategoryLarge;
+    if (!category || UIContentSizeCategoryCompareToCategory(category, UIContentSizeCategoryLarge) == NSOrderedDescending)
+        category = UIContentSizeCategoryLarge;
+    // UIKit recreates navigation/Search controls outside a list's view tree.
+    // Bound the inherited category too, including after a system text change.
+    window.traitOverrides.preferredContentSizeCategory = category;
+}
+
+void wq_configure_window(UIWindow *window)
+{
+    static NSHashTable<UIWindow *> *windows;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        windows = NSHashTable.weakObjectsHashTable;
+        [NSNotificationCenter.defaultCenter addObserverForName:UIContentSizeCategoryDidChangeNotification object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *note) {
+            UIContentSizeCategory category = note.userInfo[UIContentSizeCategoryNewValueKey];
+            for (UIWindow *ownedWindow in windows.allObjects)
+                wq_window_text_category(ownedWindow, category ?: ownedWindow.windowScene.traitCollection.preferredContentSizeCategory);
+        }];
+    });
+    [windows addObject:window];
+    wq_window_text_category(window, window.windowScene.traitCollection.preferredContentSizeCategory);
 }
 
 UIFont *wq_font(UIFontTextStyle style, UITraitCollection *traits)

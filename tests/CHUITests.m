@@ -90,8 +90,11 @@ static void runTypographyFixtures(UIWindow *window, UITableViewController *contr
     phase(@"runTypographyFixtures");
     // Emulate both system extremes. The workflow also sets the real simulator
     // preference before launch. These are assertions, not image captures.
-    window.traitOverrides.preferredContentSizeCategory = UIContentSizeCategoryAccessibilityExtraExtraExtraLarge;
+    [NSNotificationCenter.defaultCenter postNotificationName:UIContentSizeCategoryDidChangeNotification object:nil userInfo:
+        @{UIContentSizeCategoryNewValueKey:UIContentSizeCategoryAccessibilityExtraExtraExtraLarge}];
     [window layoutIfNeeded];
+    check(UIContentSizeCategoryCompareToCategory(window.traitCollection.preferredContentSizeCategory, UIContentSizeCategoryLarge) != NSOrderedDescending,
+          @"system-accessibility-category-is-capped-through-the-real-window-policy");
     [controller.tableView reloadData];
     checkRowLayout(controller.tableView, [NSIndexPath indexPathForRow:0 inSection:0]);
     UILabel *title = (UILabel *)controller.navigationItem.leftBarButtonItem.customView;
@@ -105,13 +108,15 @@ static void runTypographyFixtures(UIWindow *window, UITableViewController *contr
     UIFont *large = wq_font(UIFontTextStyleBody, [UITraitCollection traitCollectionWithPreferredContentSizeCategory:UIContentSizeCategoryAccessibilityExtraExtraExtraLarge]);
     UIFont *small = wq_font(UIFontTextStyleBody, [UITraitCollection traitCollectionWithPreferredContentSizeCategory:UIContentSizeCategoryExtraSmall]);
     check(large.pointSize == 17 && small.pointSize < large.pointSize, @"font-limit-allows-smaller-system-sizes");
-    window.traitOverrides.preferredContentSizeCategory = UIContentSizeCategoryExtraSmall;
+    [NSNotificationCenter.defaultCenter postNotificationName:UIContentSizeCategoryDidChangeNotification object:nil userInfo:
+        @{UIContentSizeCategoryNewValueKey:UIContentSizeCategoryExtraSmall}];
     [window layoutIfNeeded];
     [controller.tableView reloadData];
     UITableViewCell *cell = [controller tableView:controller.tableView cellForRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]];
     UIListContentConfiguration *content = (UIListContentConfiguration *)cell.contentConfiguration;
     check(content.textProperties.font.pointSize < 17, @"actual-list-respects-smaller-user-text-size");
-    [window.traitOverrides removeTrait:UITraitPreferredContentSizeCategory.class];
+    [NSNotificationCenter.defaultCenter postNotificationName:UIContentSizeCategoryDidChangeNotification object:nil userInfo:
+        @{UIContentSizeCategoryNewValueKey:window.windowScene.traitCollection.preferredContentSizeCategory}];
     [window layoutIfNeeded];
     [controller.tableView reloadData];
 }
