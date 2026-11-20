@@ -25,12 +25,16 @@ xcrun simctl install "$WQ_SIMULATOR_UDID" "$APP"
 DATA=$(xcrun simctl get_app_container "$WQ_SIMULATOR_UDID" "$BUNDLE" data)
 # Markers must belong to this run. The installed fixture bundle is test-only.
 rm -f -- "$DATA/Documents/ready-for-background" "$DATA/Documents/background-paused" \
-    "$DATA/Documents/ready-to-terminate" "$DATA/Documents/recovery-passed" "$DATA/Documents/FAIL-"*
+    "$DATA/Documents/ready-to-terminate" "$DATA/Documents/recovery-passed" "$DATA/Documents/search-navigation.log" "$DATA/Documents/FAIL-"*
 wait_marker() {
     local marker=$1
     for ((attempt=0; attempt<60; attempt++)); do
         if compgen -G "$DATA/Documents/FAIL-*" >/dev/null; then
             ls "$DATA/Documents/FAIL-"*
+            if [[ -f "$DATA/Documents/search-navigation.log" ]]; then
+                cp "$DATA/Documents/search-navigation.log" "$OUT/search-navigation.log"
+                cat "$OUT/search-navigation.log"
+            fi
             return 1
         fi
         if [[ -f "$DATA/Documents/$marker" ]]; then return 0; fi

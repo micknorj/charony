@@ -39,12 +39,13 @@ static void CHWrite(NSString *name, id value)
     NSData *data = [NSJSONSerialization dataWithJSONObject:value options:NSJSONWritingPrettyPrinted error:nil];
     [data writeToFile:CHControl(name) options:NSDataWritingAtomic error:nil];
 }
-static _Atomic BOOL CHHold, CHReached;
+static _Atomic BOOL CHHold, CHReached, CHReleased;
 static dispatch_semaphore_t CHRelease;
 static void CHArmOperation(void)
 {
     CHRelease = dispatch_semaphore_create(0);
     atomic_store(&CHReached, NO);
+    atomic_store(&CHReleased, NO);
     atomic_store(&CHHold, YES);
     wq_test_tree_hook = ^(NSString *stage, NSString *__unused path) {
         if ([stage isEqualToString:@"purgeBeforeUnlink"] && atomic_exchange(&CHHold, NO)) {
@@ -56,6 +57,7 @@ static void CHArmOperation(void)
 static void CHReleaseOperation(void)
 {
     atomic_store(&CHHold, NO);
+    atomic_store(&CHReleased, YES);
     if (CHRelease) dispatch_semaphore_signal(CHRelease);
     wq_test_tree_hook = nil;
 }
@@ -129,14 +131,27 @@ static WQCacheItem *CHCacheRow(NSString *name, NSString *bundle)
 @property (nonatomic, strong) NSMutableArray *missing;
 @property (nonatomic) NSUInteger sequence;
 @property (nonatomic) BOOL keyboardVisible;
+@property (nonatomic) BOOL keepAlertAfterCapture;
+@property (nonatomic) BOOL pendingUIAction;
 @property (nonatomic, copy) dispatch_block_t afterCapture;
 @property (nonatomic, strong) UISceneConnectionOptions *connectionOptions;
 @end
 @implementation CHGalleryScene
 - (void)fail:(NSString *)reason
 {
+    UIViewController *top = CHTop(self.window.rootViewController);
+    NSDictionary *details = @{@"reason":reason, @"sequence":@(self.sequence),
+        @"topClass":NSStringFromClass(top.class) ?: @"nil", @"topTitle":top.title ?: @"nil",
+        @"appsVisible":@(self.apps.view.window != nil), @"appsIsTop":@(self.apps.navigationController.topViewController == self.apps),
+        @"appBusy":[self.apps valueForKey:@"busy"] ?: @NO,
+        @"pendingClearTitle":[self.apps valueForKey:@"pendingClearTitle"] ?: @"nil",
+        @"pendingClearMessage":[self.apps valueForKey:@"pendingClearMessage"] ?: @"nil",
+        @"cacheCleaning":[self.caches valueForKey:@"cleaning"] ?: @NO,
+        @"cacheResult":[self.caches valueForKey:@"result"] ?: @"nil",
+        @"operationReached":@(atomic_load(&CHReached)), @"operationReleased":@(atomic_load(&CHReleased)),
+        @"pendingUIAction":@(self.pendingUIAction), @"missing":self.missing ?: @[]};
+    CHWrite(@"capture-failed.json", details);
     CHReleaseOperation();
-    CHWrite(@"capture-failed.json", @{@"reason":reason, @"sequence":@(self.sequence)});
 }
 - (void)later:(dispatch_block_t)block
 {
@@ -167,8 +182,18 @@ static WQCacheItem *CHCacheRow(NSString *name, NSString *bundle)
         [NSFileManager.defaultManager removeItemAtPath:CHControl(@"capture-ack.txt") error:nil];
         dispatch_block_t after = self.afterCapture;
         self.afterCapture = nil;
-        if (after) after();
-        [self later:^{ [self next]; }];
+        BOOL keepAlert = self.keepAlertAfterCapture;
+        self.keepAlertAfterCapture = NO;
+        dispatch_block_t advance = ^{
+            if (after) after();
+            [self later:^{
+                [self until:^BOOL { return !self.pendingUIAction; } attempts:150 then:^{ [self next]; }];
+            }];
+        };
+        // A held mutation may finish as soon as `after` releases it. The
+        // preceding alert must have fully dismissed before that happens.
+        if (keepAlert) advance();
+        else [self dismissThen:advance];
     } else dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 100 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{ [self awaitAck:identifier]; });
 }
 - (void)offer:(NSString *)identifier title:(NSString *)title note:(NSString *)note
@@ -191,13 +216,20 @@ static WQCacheItem *CHCacheRow(NSString *name, NSString *bundle)
         [self awaitAck:identifier];
     }];
 }
+- (void)dismissThen:(dispatch_block_t)completion
+{
+    UIViewController *top = CHTop(self.window.rootViewController);
+    if ([top isKindOfClass:UIAlertController.class]) {
+        self.pendingUIAction = YES;
+        [top dismissViewControllerAnimated:NO completion:^{
+            self.pendingUIAction = NO;
+            if (completion) completion();
+        }];
+    } else if (completion) completion();
+}
 - (void)dismiss
 {
-    // Dismiss only the alert we presented. Dismissing the entire tab hierarchy
-    // while Search is active also dismisses its context mid-transfer.
-    UIViewController *top = CHTop(self.window.rootViewController);
-    if ([top isKindOfClass:UIAlertController.class])
-        [top dismissViewControllerAnimated:NO completion:nil];
+    [self dismissThen:nil];
 }
 
 - (void)showTab:(NSUInteger)index
@@ -261,7 +293,9 @@ static WQCacheItem *CHCacheRow(NSString *name, NSString *bundle)
     UIAlertAction *action = alert.actions[index];
     void (^handler)(UIAlertAction *) = nil;
     @try { handler = [action valueForKey:@"handler"]; } @catch (NSException *__unused exception) {}
+    self.pendingUIAction = YES;
     [alert dismissViewControllerAnimated:NO completion:^{
+        self.pendingUIAction = NO;
         if (handler) handler(action);
         else [self fail:@"UIKit did not expose the fixture-driven alert action; no outcome was invented"];
     }];
@@ -308,7 +342,12 @@ static WQCacheItem *CHCacheRow(NSString *name, NSString *bundle)
     [gallery add:^{ [gallery showTab:0]; gallery.apps.contextSearchController.searchBar.text=@""; [gallery.apps updateSearchResultsForSearchController:gallery.apps.contextSearchController]; [gallery seedApps]; [gallery offer:@"apps-search-dismissed" title:@"Apps — Search dismissed" note:@"Actual contextual controller must be restored and visible"]; }];
     [gallery add:^{ [gallery showTab:0]; gallery.apps.contextSearchController.searchBar.text=@""; [gallery.apps updateSearchResultsForSearchController:gallery.apps.contextSearchController]; [gallery seedApps]; [gallery.apps tableView:gallery.apps.tableView didSelectRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]]; [gallery offer:@"app-clear-confirmation" title:@"Apps — permanent clearing confirmation" note:@"Actual confirmation; no operation is accepted for this frame"]; }];
     [gallery add:^{ [gallery dismiss]; CHArmOperation(); [gallery.apps clear:[[gallery.apps valueForKey:@"visibleApps"] firstObject]]; [gallery until:^BOOL{return atomic_load(&CHReached);} attempts:150 then:^{ [gallery offer:@"app-clear-progress" title:@"Apps — deletion in progress" note:@"Real deletion of disposable files, paused at a safe fixture boundary for capture"]; }]; }];
-    [gallery add:^{ (void)wq_begin_mutation(gallery.apps); gallery.afterCapture=^{ [gallery dismiss]; CHReleaseOperation(); }; [gallery offer:@"operation-in-progress" title:@"Concurrent operation refused" note:@"Actual cross-tab mutation reservation alert"]; }];
+    [gallery add:^{ (void)wq_begin_mutation(gallery.apps); gallery.afterCapture=^{
+        if (gallery.apps.presentedViewController || ![[gallery.apps valueForKey:@"busy"] boolValue]) {
+            [gallery fail:@"The held mutation must stay busy until the conflict alert has fully dismissed"]; return;
+        }
+        CHReleaseOperation();
+    }; [gallery offer:@"operation-in-progress" title:@"Concurrent operation refused" note:@"Actual cross-tab mutation reservation alert"]; }];
     [gallery add:^{ [gallery until:^BOOL{return [CHTop(gallery.window.rootViewController).title isEqualToString:@"Data cleared"];} attempts:150 then:^{ [gallery offer:@"app-clear-success" title:@"Apps — clear success" note:@"Actual disposable-file clear outcome; not protected-app validation"]; }]; }];
     [gallery add:^{ [gallery dismiss]; [gallery seedApps]; NSString *path=[[[gallery.apps valueForKey:@"visibleApps"] firstObject] valueForKey:@"container"]; [@{@"MCMMetadataIdentifier":@"com.example.changed"} writeToFile:[path stringByAppendingPathComponent:@".com.apple.mobile_container_manager.metadata.plist"] atomically:YES]; [gallery.apps clear:[[gallery.apps valueForKey:@"visibleApps"] firstObject]]; [gallery until:^BOOL{return [CHTop(gallery.window.rootViewController).title isEqualToString:@"Clear incomplete"];} attempts:150 then:^{ [gallery offer:@"app-clear-failure" title:@"Apps — identity refusal" note:@"Real validator refuses changed fixture identity before deleting data"]; }]; }];
     [gallery add:^{ [gallery showTab:1]; [gallery publish:@"clean" rows:@[] note:nil]; [gallery offer:@"caches-initial" title:@"Caches — initial idle fixture" note:nil]; }];
@@ -338,9 +377,9 @@ static WQCacheItem *CHCacheRow(NSString *name, NSString *bundle)
     [gallery add:^{ [gallery showTab:1]; [gallery seedCaches]; WQScanTask *t=[WQScanTask taskNamed:@"clean"]; [t beginFresh:YES cancel:^{}]; [t pause]; [gallery offer:@"cache-scan-paused" title:@"Caches — scan paused" note:nil]; }];
     [gallery add:^{ WQScanTask *t=[WQScanTask taskNamed:@"clean"]; NSUInteger g=[t beginFresh:NO cancel:^{}]; [t progress:@"Measuring apps…" fraction:0.62 generation:g]; [gallery.caches setValue:@0.62 forKey:@"scanProgress"]; [gallery.caches.tableView reloadData]; [gallery offer:@"cache-scan-resumed" title:@"Caches — scan resumed" note:nil]; }];
     [gallery add:^{ [gallery showTab:0]; [gallery publish:@"apps" rows:@[] note:@"An App Group is required. Re-sign charony with a tool that preserves its App Group entitlement."]; [gallery offer:@"app-group-missing" title:@"Apps — missing App Group" note:@"Fixture result uses the actual application error wording"]; }];
-    [gallery add:^{ atomic_store(&gAccessRecoveryNeeded,YES); wq_offer_access_recovery(gallery.apps); [gallery offer:@"access-cache-recovery" title:@"Conditional Reset Access Cache" note:@"Injected recoverable-cache flag; actual recovery interface"]; }];
+    [gallery add:^{ atomic_store(&gAccessRecoveryNeeded,YES); wq_offer_access_recovery(gallery.apps); gallery.keepAlertAfterCapture=YES; [gallery offer:@"access-cache-recovery" title:@"Conditional Reset Access Cache" note:@"Injected recoverable-cache flag; actual recovery interface"]; }];
     [gallery add:^{ [gallery advanceAction:1]; [gallery until:^BOOL{return [CHTop(gallery.window.rootViewController).title isEqualToString:@"Recovery incomplete"];} attempts:150 then:^{ [gallery offer:@"access-cache-reset-failure" title:@"Access Cache — recovery failure" note:@"Actual reset cannot obtain an App Group in the unsigned fixture environment"]; }]; }];
-    [gallery add:^{ atomic_store(&gAccessRecoveryNeeded,NO); [gallery dismiss]; [gallery seedApps]; dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED,0), ^{ (void)CHConfirmFullScan(@"the app folders",1200000,90); }); [gallery until:^BOOL{return [CHTop(gallery.window.rootViewController) isKindOfClass:UIAlertController.class];} attempts:150 then:^{ gallery.afterCapture=^{ [gallery advanceAction:0]; }; [gallery offer:@"full-scan-consent" title:@"Full inode scan consent" note:@"Real consent dialog with fixture estimate; canceled without scanning protected paths"]; }]; }];
+    [gallery add:^{ atomic_store(&gAccessRecoveryNeeded,NO); [gallery dismiss]; [gallery seedApps]; dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED,0), ^{ (void)CHConfirmFullScan(@"the app folders",1200000,90); }); [gallery until:^BOOL{return [CHTop(gallery.window.rootViewController) isKindOfClass:UIAlertController.class];} attempts:150 then:^{ gallery.keepAlertAfterCapture=YES; gallery.afterCapture=^{ [gallery advanceAction:0]; }; [gallery offer:@"full-scan-consent" title:@"Full inode scan consent" note:@"Real consent dialog with fixture estimate; canceled without scanning protected paths"]; }]; }];
     [gallery add:^{ [gallery dismiss]; [gallery seedApps]; NSString *failure=wq_access_capability_failure(); if(!failure){ [gallery.missing addObject:@{@"state":@"unsupported-build-startup",@"reason":@"This simulator host did not trigger the production capability failure"}]; [gallery next]; return; } UIWindow *original=gallery.window; CHSceneDelegate *blocked=[CHSceneDelegate new]; [blocked scene:original.windowScene willConnectToSession:original.windowScene.session options:gallery.connectionOptions]; gallery.window=blocked.window; gallery.afterCapture=^{ blocked.window.hidden=YES; gallery.window=original; [original makeKeyAndVisible]; }; [gallery offer:@"unsupported-build-startup" title:@"Production startup capability failure" note:@"Actual production startup view checks the simulator host kernel; this is not the target iPhone build"]; }];
 }
 - (void)scene:(UIScene *)scene willConnectToSession:(UISceneSession *)session options:(UISceneConnectionOptions *)options

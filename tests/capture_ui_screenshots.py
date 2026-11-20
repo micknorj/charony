@@ -35,6 +35,7 @@ def capture_states(device, prefix, output, record):
     while time.monotonic() < deadline:
         failure = documents / 'capture-failed.json'
         if failure.exists():
+            shutil.copyfile(failure, output / f'{prefix}_failure.json')
             raise RuntimeError(f'Fixture state failure: {failure.read_text()}')
         done = documents / 'capture-done.json'
         if done.exists():

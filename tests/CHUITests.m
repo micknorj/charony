@@ -36,17 +36,41 @@ static void selectFixtureTab(UITabBarController *tabs, UITab *tab)
         [tabs.delegate tabBarController:tabs didSelectTab:tab previousTab:previous];
     }
 }
+static void awaitUIKitState(BOOL (^ready)(void), NSUInteger remaining, NSString *assertion,
+                            NSDictionary *(^diagnostics)(void), dispatch_block_t next)
+{
+    if (ready()) { next(); return; }
+    if (!remaining) {
+        NSData *data = [NSJSONSerialization dataWithJSONObject:diagnostics() options:NSJSONWritingPrettyPrinted error:nil];
+        NSString *documents = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
+        [data writeToFile:[documents stringByAppendingPathComponent:@"search-navigation.log"] atomically:YES];
+        check(NO, assertion);
+        return;
+    }
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 100 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{
+        awaitUIKitState(ready, remaining - 1, assertion, diagnostics, next);
+    });
+}
 static void runActiveSearchNavigationFixtures(UITabBarController *tabs, WQAppsViewController *apps,
                                                UINavigationController *appsNav, dispatch_block_t next)
 {
     UITab *search = tabs.tabs[2], *appsTab = tabs.tabs[0], *cachesTab = tabs.tabs[1];
+    UISearchController *controller = apps.contextSearchController;
+    NSDictionary *(^diagnostics)(void) = ^NSDictionary *{
+        id pending = [tabs respondsToSelector:NSSelectorFromString(@"pendingTab")] ? [tabs valueForKey:@"pendingTab"] : nil;
+        return @{@"selectedTab":tabs.selectedTab.identifier ?: @"nil", @"pendingTab":[pending valueForKey:@"identifier"] ?: @"nil",
+            @"appsTop":NSStringFromClass(appsNav.topViewController.class) ?: @"nil",
+            @"appsIsTop":@(appsNav.topViewController == apps), @"appsVisible":@(apps.view.window != nil),
+            @"searchActive":@(controller.active), @"searchPresenting":@(controller.isBeingPresented),
+            @"searchDismissing":@(controller.isBeingDismissed), @"searchDelegate":NSStringFromClass([(id)controller.delegate class]) ?: @"nil"};
+    };
+    BOOL (^searchReady)(void) = ^BOOL { return controller.active && apps.view.window && !controller.isBeingPresented; };
     check([tabs.delegate tabBarController:tabs shouldSelectTab:search], @"search-selection-allowed");
     UITab *previous = tabs.selectedTab;
     tabs.selectedTab = search;
     [tabs.delegate tabBarController:tabs didSelectTab:search previousTab:previous];
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-        UISearchController *controller = apps.contextSearchController;
-        check(controller.active && apps.view.window != nil, @"search-is-actually-presented");
+    awaitUIKitState(searchReady, 150, @"search-is-actually-presented", diagnostics, ^{
+        check(searchReady(), @"search-is-actually-presented");
         controller.searchBar.text = @"no-match";
         [apps updateSearchResultsForSearchController:controller];
         check([apps.tableView numberOfRowsInSection:0] == 0, @"apps-search-filters-current-context");
@@ -54,14 +78,18 @@ static void runActiveSearchNavigationFixtures(UITabBarController *tabs, WQAppsVi
         [apps updateSearchResultsForSearchController:controller];
         check([apps.tableView numberOfRowsInSection:0] == 1, @"bundle-and-name-search");
         selectFixtureTab(tabs, appsTab);
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+        awaitUIKitState(^BOOL {return tabs.selectedTab == appsTab && appsNav.topViewController == apps &&
+                                  apps.view.window && [apps.view isDescendantOfView:appsNav.view];},
+                         150, @"same-search-context-restored", diagnostics, ^{
             check(tabs.selectedTab == appsTab && appsNav.topViewController == apps, @"same-search-context-restored");
             check(apps.view.window != nil && [apps.view isDescendantOfView:appsNav.view], @"apps-content-remains-visible-after-active-search");
             selectFixtureTab(tabs, search);
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-                check(controller.active && apps.view.window != nil, @"search-reopens-after-restoration");
+            awaitUIKitState(searchReady, 150, @"search-reopens-after-restoration", diagnostics, ^{
+                check(searchReady(), @"search-reopens-after-restoration");
                 selectFixtureTab(tabs, cachesTab);
-                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+                awaitUIKitState(^BOOL {return tabs.selectedTab == cachesTab && appsNav.topViewController == apps &&
+                    ((UINavigationController *)tabs.selectedViewController).topViewController.view.window != nil;},
+                    150, @"original-context-restored", diagnostics, ^{
                     check(tabs.selectedTab == cachesTab && appsNav.topViewController == apps, @"original-context-restored");
                     check(tabs.selectedViewController.view.window != nil, @"cache-content-visible-after-active-search");
                     next();
