@@ -441,11 +441,11 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
     NSString *_query;
     NSString *_status;   // scan / clean progress, nil when idle
     NSString *_result;   // last clean result
-    BOOL _scanning, _cleaning, _scanLimited, _cleanRequiresRescan;
+    BOOL _scanning, _cleaning, _cleanRequiresRescan;
     // A refresh asked for while cleaning runs once the cleaning has ended:
     // a scan must not replace the list (or the Stop button) under it.
     BOOL _refreshAfterClean, _rescanAfterClean;
-    WQScanCancellation *_scanCancellation;
+
     WQScanCancellation *_cleanCancellation;
     NSUInteger _scanGeneration;
     float _scanProgress;   // 0…1 while scanning
@@ -676,12 +676,12 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
     _resumeScan = NO;
     if (!taskGeneration) return;
     NSString *taskID = _scanTask.identifier;
-    _scanCancellation = cancellation;
+
     NSUInteger generation = ++_scanGeneration;
     _scanning = YES;
     _scanProgress = 0;
     _scanBytes = 0;
-    _scanLimited = NO;
+
     _cleanRequiresRescan = NO;
     _result = nil;
     [self updateButtons];
@@ -1078,7 +1078,7 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
                 wq_end_mutation();
                 self->_cleaning = NO;
                 self->_cleanCancellation = nil;
-                self->_scanLimited = YES;
+
                 self->_cleanRequiresRescan = YES;
                 self->_status = nil;
                 BOOL rescanned = [self rescanAfterClean:NO];
@@ -1128,7 +1128,7 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
                 return;
             }
             if (validationFailure) {
-                self->_scanLimited = YES;
+
                 self->_cleanRequiresRescan = YES;
                 self->_status = nil;
                 BOOL rescanned = [self rescanAfterClean:NO];

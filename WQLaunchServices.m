@@ -1386,13 +1386,6 @@ NSString *wq_group_id_for_container(NSString *path)
     }
 }
 
-NSArray<NSString *> *wq_ls_bundle_containers(void)
-{
-    @synchronized (wq_ls_lock()) {
-        return [wq_bundle_containers_locked().allKeys sortedArrayUsingSelector:@selector(compare:)];
-    }
-}
-
 // Apple's apps are named in WQ Files' language (the tables hold "Weather",
 // "Stocks"…); every other app keeps its name exactly, even when it happens to
 // match a UI key such as "Files" or "Delete" (review CR-31).

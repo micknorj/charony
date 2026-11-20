@@ -14,7 +14,6 @@
 #import "WQCacheSafety.h"
 #import "CHAppData.h"
 #import <errno.h>
-#import <sys/mount.h>
 #import <sys/stat.h>
 
 #pragma mark - Apps manager
@@ -51,7 +50,7 @@
     NSString *_status;
     float _fraction;   // progress bar under the status; negative hides it
     BOOL _busy;
-    WQScanCancellation *_scanCancellation;
+
     NSUInteger _scanGeneration;
     BOOL _scanning;
     BOOL _clearResultDeliveryScheduled;
@@ -66,15 +65,14 @@ typedef NS_ENUM(NSInteger, WQInstallState) { WQInstallUnknown = 0, WQInstallInst
 
 // An offloaded app keeps a placeholder bundle (Info.plist and icons) but its
 // executable is removed. The bundle path comes from the LaunchServices
-static WQInstallState wq_app_install_state(NSString *bundleID, NSString **why)
+static WQInstallState wq_app_install_state(NSString *bundleID)
 {
     NSString *path = bundleID.length ? wq_bundle_path_for_id(bundleID) : nil;
-    if (!path.length) { *why = @"no bundle path: not in the app database"; return WQInstallUnknown; }
+    if (!path.length) return WQInstallUnknown;
     // Built-in apps live on the read-only system volume, which this app can't
     // read; they can't be offloaded (removable Apple apps live in bundle
     // containers like everyone else's).
     if ([path hasPrefix:@"/Applications/"] || [path hasPrefix:@"/System/"]) {
-        *why = @"built-in: system volume";
         return WQInstallInstalled;
     }
     // Checking whether a path exists works even where reading is refused
@@ -84,46 +82,29 @@ static WQInstallState wq_app_install_state(NSString *bundleID, NSString **why)
     struct stat guessed;
     NSString *guess = [path stringByAppendingPathComponent:path.lastPathComponent.stringByDeletingPathExtension];
     if (lstat(guess.fileSystemRepresentation, &guessed) == 0 && S_ISREG(guessed.st_mode)) {
-        *why = @"installed: executable present";
         return WQInstallInstalled;
     }
     NSString *plistPath = [path stringByAppendingPathComponent:@"Info.plist"];
     // Installed apps' bundles refuse reading (iOS 26 and 27.0.1), while an
-    // offloaded app's placeholder bundle can be read. A plain read first (no
-    NSError *plainError = nil;
-    NSData *data = [NSData dataWithContentsOfFile:plistPath options:0 error:&plainError];
-    int plainErrno = (int)[plainError.userInfo[NSUnderlyingErrorKey] code];
+    // offloaded app's placeholder bundle can be read. Try a plain read first.
+    NSData *data = [NSData dataWithContentsOfFile:plistPath];
     static NSInteger tokenAttempts, tokenSuccesses;
     BOOL tryToken = NO;
     @synchronized ([WQAppItem class]) { tryToken = !data && (tokenSuccesses > 0 || tokenAttempts < 3); }
-    NSString *readError = nil;
     if (tryToken) {
-        data = (wq_grant(path.stringByDeletingLastPathComponent) || wq_grant(path)) ? wq_read(plistPath, 4 * 1024 * 1024, &readError) : nil;
+        data = (wq_grant(path.stringByDeletingLastPathComponent) || wq_grant(path)) ? wq_read(plistPath, 4 * 1024 * 1024, NULL) : nil;
         @synchronized ([WQAppItem class]) { tokenAttempts++; if (data) tokenSuccesses++; }
     }
     id info = data ? [NSPropertyListSerialization propertyListWithData:data options:0 format:NULL error:nil] : nil;
-    if (![info isKindOfClass:NSDictionary.class]) {
-        struct stat st;
-        BOOL bundleThere = lstat(path.fileSystemRepresentation, &st) == 0;
-        BOOL denied = plainErrno == EPERM || plainErrno == EACCES || plainError.code == NSFileReadNoPermissionError;
-        if (!data && bundleThere && denied) {
-            *why = [NSString stringWithFormat:@"refused: %@ can't be read", path.lastPathComponent];
-            return WQInstallUnknown;
-        }
-        *why = [NSString stringWithFormat:@"%@: %@ (%@)", data ? @"Info.plist not a dictionary" : @"Info.plist unreadable",
-                plistPath, data ? @"bad plist" : (readError ?: plainError.localizedDescription ?: @"no reason")];
-        if (!data && !bundleThere) *why = [*why stringByAppendingString:@", bundle not visible"];
-        return WQInstallUnknown;
-    }
+    if (![info isKindOfClass:NSDictionary.class]) return WQInstallUnknown;
     NSString *executable = [info[@"CFBundleExecutable"] isKindOfClass:NSString.class] ? info[@"CFBundleExecutable"] : nil;
-    if (!executable.length || [executable containsString:@"/"]) { *why = @"no CFBundleExecutable: in Info.plist"; return WQInstallUnknown; }
+    if (!executable.length || [executable containsString:@"/"]) return WQInstallUnknown;
     NSString *exePath = [path stringByAppendingPathComponent:executable];
     struct stat st;
-    if (lstat(exePath.fileSystemRepresentation, &st) == 0) { *why = @"installed: executable present"; return WQInstallInstalled; }
+    if (lstat(exePath.fileSystemRepresentation, &st) == 0) return WQInstallInstalled;
     int err = errno;
-    if (wq_stat(exePath, &st)) { *why = @"installed: executable present"; return WQInstallInstalled; }
-    if (err == ENOENT) { *why = [NSString stringWithFormat:@"offloaded: %@ missing from %@", executable, path]; return WQInstallOffloaded; }
-    *why = [NSString stringWithFormat:@"executable unchecked: %@ (%s)", exePath, strerror(err)];
+    if (wq_stat(exePath, &st)) return WQInstallInstalled;
+    if (err == ENOENT) return WQInstallOffloaded;
     return WQInstallUnknown;
 }
 
@@ -314,7 +295,7 @@ static BOOL wq_dir_size_cancellable(NSString *dir, NSString *taskID, WQScanCance
     _resumeScan = NO;
     if (!taskGeneration) return;
     NSString *taskID = _scanTask.identifier;
-    _scanCancellation = cancellation;
+
     NSUInteger generation = ++_scanGeneration;
     _scanning = YES;
     [self setBusy:YES status:@"Finding apps…"];
@@ -348,8 +329,7 @@ static BOOL wq_dir_size_cancellable(NSString *dir, NSString *taskID, WQScanCance
             app.containerDevice = identity.st_dev;
             app.containerInode = identity.st_ino;
             (void)wq_app_icon(bundle);
-            NSString *why = nil;
-            app.installState = wq_app_install_state(bundle, &why);
+            app.installState = wq_app_install_state(bundle);
             unsigned long long bytes = 0;
             BOOL complete = NO;
             if (!wq_dir_size_cancellable(container, taskID, cancellation, &bytes, &complete)) return;
@@ -482,7 +462,6 @@ static BOOL wq_dir_size_cancellable(NSString *dir, NSString *taskID, WQScanCance
     [self.tableView reloadSectionIndexTitles];
 }
 
-// Long-press: copy the bundle ID or container path, open the data folder.
 - (void)updateSearchResultsForSearchController:(UISearchController *)searchController
 {
     _query = [searchController.searchBar.text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet];

@@ -80,10 +80,6 @@ typedef NS_ENUM(NSInteger, WQMeasureResult) {
 WQMeasureResult wq_measure_tree(NSString *dir, WQScanCancellation *_Nullable cancellation,
                                 unsigned long long *_Nullable bytes);
 
-// Deletes every item *inside* dir (dir itself stays). No backup — for caches.
-// Adds freed bytes to *freed. A missing dir counts as done; NO if dir cannot
-// be read or listed, ancestry contains links (except canonical /var), the target
-// changes, or some items could not be removed. Child links are not followed.
 // MCM container identifier (bundle or group id) of a container folder.
 NSString *_Nullable wq_container_label(NSString *dir);
 // Extra source for wq_container_label, tried after the identifier attribute and
@@ -97,10 +93,8 @@ NSString *_Nullable wq_container_label(NSString *dir);
 // full scan and its end (finished = YES). Without these hooks no full scan runs.
 void wq_set_full_scan_ui(BOOL (*_Nullable confirm)(NSString *what, int64_t ids, double seconds),
                          void (*_Nullable progress)(int64_t done, int64_t total, BOOL finished));
-// Stops the running full scan (the scan window's Stop button).
+// Cancels the owned full scan; retained for native cancellation regression tests.
 void wq_full_scan_stop(void);
-// Whether the last listing failed because a full scan wasn't confirmed.
-BOOL wq_full_scan_was_declined(void);
 void wq_set_container_list_provider(NSArray<NSString *> *_Nullable (*_Nullable provider)(NSString *_Nullable storeHint));
 void wq_set_container_label_resolver(NSString *_Nullable (*_Nullable resolver)(NSString *path));
 // App Group folder -> group id, consulted after the metadata plist.

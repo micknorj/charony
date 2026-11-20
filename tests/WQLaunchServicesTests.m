@@ -204,7 +204,7 @@ static void TestContainerMapping(NSString *path)
     WQCheck([wq_bundle_path_for_id(@"com.example.app") isEqualToString:[kBundleContainer stringByAppendingString:@"/Example.app"]]);
     WQCheck([wq_bundle_id_for_container(kBundleContainer) isEqualToString:@"com.example.app"]);
     WQCheck([wq_bundle_id_for_container([kBundleContainer substringFromIndex:8]) isEqualToString:@"com.example.app"]);
-    WQCheck([wq_ls_bundle_containers() isEqualToArray:@[kBundleContainer]]);
+    WQCheck(wq_bundle_id_for_container([kBundleContainer stringByAppendingString:@"-changed"]) == nil);
     WQCheck(wq_bundle_id_for_container([kBundleContainer stringByAppendingString:@"/Example.app"]) == nil);
     // A display name whose length is a multiple of 4 has no terminator.
     WQCheck([wq_display_name(@"com.example.app") isEqualToString:@"AppName8"]);

@@ -606,7 +606,6 @@ static int wq_open_directory(NSString *path)
     return wq_open_directory_flags(path, O_RDONLY);
 }
 
-// Backs a regular file up (into `unitStamp`, or a new unit) and removes it.
 // fsgetpath: resolve a filesystem object id to a path. Not in the public SDK.
 extern ssize_t fsgetpath(char *buf, size_t buflen, fsid_t *fsid, uint64_t objid);
 
@@ -1109,7 +1108,6 @@ static BOOL wq_fsgetpath_sees_others(fsid_t fsid, int64_t maxInode, double *idsP
 static BOOL (*gFullScanConfirm)(NSString *what, int64_t ids, double seconds);
 static void (*gFullScanProgress)(int64_t done, int64_t total, BOOL finished);
 static WQScanCancellation *gFullScanStop;
-static _Atomic BOOL gFullScanDeclined;
 
 void wq_set_full_scan_ui(BOOL (*confirm)(NSString *what, int64_t ids, double seconds),
                          void (*progress)(int64_t done, int64_t total, BOOL finished))
@@ -1121,11 +1119,6 @@ void wq_set_full_scan_ui(BOOL (*confirm)(NSString *what, int64_t ids, double sec
 void wq_full_scan_stop(void)
 {
     @synchronized (NSNull.null) { [gFullScanStop cancel]; }
-}
-
-BOOL wq_full_scan_was_declined(void)
-{
-    return atomic_load(&gFullScanDeclined);
 }
 
 // Full scans run one at a time (the App Data and Internal Daemons slots can
@@ -1165,7 +1158,7 @@ static WQScanCancellation *wq_full_scan_begin(NSString *what, int64_t ids, doubl
     // Without an App Group no container can be opened or named, so a long
     // scan would only produce a list of unusable folders.
     if (!wq_app_group()) {
-        atomic_store(&gFullScanDeclined, YES);
+
 
         return nil;
     }
@@ -1174,12 +1167,12 @@ static WQScanCancellation *wq_full_scan_begin(NSString *what, int64_t ids, doubl
     // the only place to Stop it.
 
     if (!gFullScanConfirm || !gFullScanConfirm(what, ids, seconds)) {
-        atomic_store(&gFullScanDeclined, YES);
+
 
         wq_full_scan_release();
         return nil;
     }
-    atomic_store(&gFullScanDeclined, NO);
+
     WQScanCancellation *stop = [WQScanCancellation new];
     @synchronized (NSNull.null) { gFullScanStop = stop; }
     return stop;
@@ -1353,7 +1346,7 @@ static NSDictionary<NSString *, NSArray<NSString *> *> *wq_run_shared_scan(fsid_
 {
     if (demand && ![demand wait:nil]) return nil;
     NSArray<NSString *> *roots = wq_shared_scan_roots();
-    atomic_store(&gFullScanDeclined, NO);
+
     if (inodeOnly) goto inodeScan;
     {
     NSDictionary<NSString *, NSArray<NSString *> *> *listed = wq_mcm_list_containers(roots);
@@ -1443,7 +1436,6 @@ inodeScan:;
 @interface WQScanSlot : NSObject
 @property (nonatomic, strong) WQScanDemand *demand;
 @property (nonatomic, copy) NSDictionary<NSString *, NSArray<NSString *> *> *scan;
-@property (nonatomic) NSTimeInterval at;
 @property (nonatomic, strong) dispatch_group_t group;
 @property (nonatomic, strong) NSMutableDictionary *box;
 @property (nonatomic) NSUInteger generation;
@@ -1465,7 +1457,7 @@ static void wq_scan_slots_clear(void)
     for (int i = 0; i < 2; i++) {
         WQScanSlot *slot = wq_scan_slot(i == 1);
         slot.scan = nil;
-        slot.at = 0;
+
         slot.generation++;
         // A running worker keeps its own waiters but no longer serves new
         // callers or fills the slot.
@@ -1514,7 +1506,7 @@ static NSArray<NSString *> *wq_shared_children(NSString *base, fsid_t fsid, WQSc
                 // must not overwrite the replacement worker's cache.
                 slot.generation++;
                 slot.scan = nil;
-                slot.at = 0;
+
             }
             NSUInteger generation = slot.generation;
             dispatch_group_t previous = slot.group ?: slot.previous;
@@ -1543,7 +1535,7 @@ static NSArray<NSString *> *wq_shared_children(NSString *base, fsid_t fsid, WQSc
                         startedBox[@"scan"] = scan;   // its own waiters asked before any invalidation
                         if (slot.generation == generation) {
                             slot.scan = scan;
-                            slot.at = NSDate.date.timeIntervalSinceReferenceDate;
+
                         }
                     }
                     if (slot.group == started) {
@@ -2107,7 +2099,7 @@ NSString *wq_container_label(NSString *dir)
     NSString *resolved = gContainerLabelResolver ? gContainerLabelResolver(WQCanonicalVarPath(dir)) : nil;
     if (resolved.length) return resolved;
     // The metadata plist is usually root-only (mode 600); only try it when the
-    // owner and mode let this app read it, so the Log isn't flooded.
+    // owner and mode let this app read it, rather than repeatedly requesting unreadable metadata.
     NSString *fromPlist = nil;
     NSString *meta = [dir stringByAppendingPathComponent:@".com.apple.mobile_container_manager.metadata.plist"];
     if (!wq_permission_hint(meta, NO)) {

@@ -15,6 +15,9 @@ static BOOL CHFixtureGrant(NSString *path)
 #define wq_grant CHFixtureGrant
 #import "../CHAppData.m"
 #undef wq_grant
+#define main CHProductionMain
+#import "../main.m"
+#undef main
 static void marker(NSString *name)
 {
     NSString *documents = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
@@ -571,6 +574,56 @@ static void runCacheStopFixture(UIWindow *window, dispatch_block_t next)
     });
 }
 
+static void runRecoveryConsentFixtures(UIWindow *window, dispatch_block_t next)
+{
+    CHFixtureApps *apps = [CHFixtureApps new];
+    window.rootViewController = [[UINavigationController alloc] initWithRootViewController:apps];
+    [window layoutIfNeeded];
+    NSDictionary *(^diagnostics)(void) = ^NSDictionary *{ return @{@"alert":apps.presentedViewController.title ?: @"nil"}; };
+    atomic_store(&gAccessRecoveryNeeded, NO);
+    wq_offer_access_recovery(apps);
+    check(!apps.presentedViewController, @"reset-access-cache-is-absent-without-a-recoverable-failure");
+    atomic_store(&gAccessRecoveryNeeded, YES);
+    wq_offer_access_recovery(apps);
+    awaitUIKitState(^BOOL { return [apps.presentedViewController.title isEqualToString:@"Access cache needs recovery"] && !apps.presentedViewController.isBeingPresented; },
+        150, @"conditional-recovery-interface-is-reachable", diagnostics, ^{
+        UIAlertController *alert = (UIAlertController *)apps.presentedViewController;
+        UIAlertAction *reset = alert.actions.lastObject;
+        check([reset.title isEqualToString:@"Reset Access Cache"], @"conditional-reset-action-exists");
+        void (^handler)(UIAlertAction *) = [reset valueForKey:@"handler"];
+        check(handler != nil, @"real-reset-action-has-handler");
+        [apps dismissViewControllerAnimated:NO completion:^{
+            handler(reset);
+            awaitUIKitState(^BOOL { return [apps.presentedViewController.title isEqualToString:@"Recovery incomplete"] && !apps.presentedViewController.isBeingPresented; },
+                150, @"unsigned-fixture-reset-reports-missing-app-group", diagnostics, ^{
+                atomic_store(&gAccessRecoveryNeeded, NO);
+                [apps dismissViewControllerAnimated:NO completion:^{
+                    __block _Atomic BOOL answered = NO;
+                    __block BOOL accepted = YES;
+                    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+                        accepted = CHConfirmFullScan(@"disposable fixture folders", 1200000, 90);
+                        atomic_store(&answered, YES);
+                    });
+                    awaitUIKitState(^BOOL { return [window.rootViewController.presentedViewController.title isEqualToString:@"Scan app containers?"] && !window.rootViewController.presentedViewController.isBeingPresented; },
+                        150, @"full-scan-consent-is-reachable", diagnostics, ^{
+                        UIAlertController *consent = (UIAlertController *)window.rootViewController.presentedViewController;
+                        UIAlertAction *cancel = consent.actions.firstObject;
+                        void (^cancelHandler)(UIAlertAction *) = [cancel valueForKey:@"handler"];
+                        check(cancel.style == UIAlertActionStyleCancel && cancelHandler != nil, @"full-scan-cancel-has-real-handler");
+                        [consent dismissViewControllerAnimated:NO completion:^{
+                            cancelHandler(cancel);
+                            awaitUIKitState(^BOOL { return atomic_load(&answered); }, 150, @"full-scan-cancel-releases-waiter", diagnostics, ^{
+                                check(!accepted, @"cancelled-consent-does-not-authorize-a-scan");
+                                next();
+                            });
+                        }];
+                    });
+                }];
+            });
+        }];
+    });
+}
+
 @interface CHFixtureScene : UIResponder <UIWindowSceneDelegate>
 @property (nonatomic, strong) UIWindow *window;
 @property (nonatomic, strong) WQScanTask *lifecycleTask;
@@ -703,7 +756,7 @@ static void runCacheStopFixture(UIWindow *window, dispatch_block_t next)
         [apps dismissViewControllerAnimated:NO completion:^{
             runCacheBatchFixtures(self.window, ^{
                 runRealAppClearFixtures(self.window, ^{ runCacheStopFixture(self.window, ^{
-                    runDeferredClearResultFixture(self.window, ^{ [self beginLifecycleValidation]; });
+                    runDeferredClearResultFixture(self.window, ^{ runRecoveryConsentFixtures(self.window, ^{ [self beginLifecycleValidation]; }); });
                 }); });
             });
         }];

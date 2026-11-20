@@ -12,9 +12,8 @@ mkdir -p "$APP"
 SDK=$(xcrun --sdk iphonesimulator --show-sdk-path)
 TARGET_ARCH=$(uname -m)
 FLAGS=(-fobjc-arc -fmodules "-fmodules-cache-path=$OUT/modules" -target "$TARGET_ARCH-apple-ios26.0-simulator" -isysroot "$SDK" -Wall -Wextra -Werror -O1)
-xcrun --sdk iphonesimulator clang "${FLAGS[@]}" -Dmain=CHProductionMain -c main.m -o "$OUT/main.o"
 SOURCES=(WQScanTask.m WQDiscoveryState.m WQLocalization.m WQLaunchServices.m WQUI.m WQApps.m)
-xcrun --sdk iphonesimulator clang "${FLAGS[@]}" "${FRAMEWORKS[@]}" "${SOURCES[@]}" tests/CHUITests.m "$OUT/main.o" -o "$APP/CHUITests"
+xcrun --sdk iphonesimulator clang "${FLAGS[@]}" "${FRAMEWORKS[@]}" "${SOURCES[@]}" tests/CHUITests.m -o "$APP/CHUITests"
 cp Info.plist "$APP/Info.plist"
 /usr/libexec/PlistBuddy -c 'Delete :CFBundleSupportedPlatforms' "$APP/Info.plist"
 /usr/libexec/PlistBuddy -c 'Set :CFBundleIdentifier io.github.micknorj.charony.ui-fixtures' "$APP/Info.plist"
@@ -61,6 +60,5 @@ xcrun simctl terminate "$WQ_SIMULATOR_UDID" "$BUNDLE"
 xcrun simctl launch "$WQ_SIMULATOR_UDID" "$BUNDLE" recover
 wait_marker recovery-passed
 retain_diagnostics
-xcrun simctl io "$WQ_SIMULATOR_UDID" screenshot "$OUT/recovery.png"
 xcrun simctl terminate "$WQ_SIMULATOR_UDID" "$BUNDLE"
 printf 'UIKit, lifecycle and cold-relaunch fixtures passed. Artifacts in %s\n' "$OUT"
