@@ -25,7 +25,7 @@ Charony uses the existing [worse_query](https://github.com/forcequitOS/worse_que
 | 27.0–27.3 beta 1 | Upstream access range; Charony device behavior unverified |
 | 27.3 beta 2 and later | Unsupported; worse_query was patched |
 
-Native builds and disposable iPhone 17 / iOS 26.2 simulator fixtures passed [GitHub Actions validation](https://github.com/micknorj/charony/actions/runs/44574969914). No physical iPhone has been tested with this implementation. See [testing and verification](TESTING.md).
+Native builds and disposable iPhone 17 / iPad Pro simulator fixtures passed [GitHub Actions validation](https://github.com/micknorj/charony/actions/runs/44763475557) on iOS 26.2 in Light and Dark. No physical iPhone has been tested with this implementation. See [testing and verification](TESTING.md).
 
 ## Installation
 

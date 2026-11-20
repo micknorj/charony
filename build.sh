@@ -64,7 +64,7 @@ python3 scripts/privacy_audit.py --binary "$APP/charony"
 plutil -convert binary1 "$APP/Info.plist"
 codesign --force --sign - --entitlements entitlements.plist "$APP"
 codesign --verify --deep --strict "$APP"
-codesign -d --entitlements :- "$APP" > "$OUT/signed-entitlements.plist"
+codesign -d --entitlements - --xml "$APP" > "$OUT/signed-entitlements.plist"
 python3 - "$OUT/signed-entitlements.plist" <<'PY'
 import plistlib,sys
 from pathlib import Path

@@ -1,25 +1,31 @@
 # Testing and verification
 
-## Verified baseline
+## Verified development revision
 
-The reviewed main revision `286782c0e35747f3676de1af23e4b1addabd7944` passed [GitHub Actions run 44606787990](https://github.com/micknorj/charony/actions/runs/44606787990). Both `upstream-baseline` and `charony` succeeded. This is build, fixture and simulator evidence; physical-device behavior remains unverified. Current functional/UI changes and their exact commit checks are tracked in [PR #2](https://github.com/micknorj/charony/pull/2); the main-branch run does not validate later changes.
+Revision `504061a780d6dd0e1ffb054a968f405fe350dd3c` passed [push validation 44763475557](https://github.com/micknorj/charony/actions/runs/44763475557) and [PR validation 44763482819](https://github.com/micknorj/charony/actions/runs/44763482819). Both required jobs succeeded in both runs. This includes all four iPhone/iPad Light/Dark profiles at the largest system accessibility text setting. Subsequent checks are attached to their exact commits in [PR #2](https://github.com/micknorj/charony/pull/2). This is build, fixture and simulator evidence; physical-device behavior remains unverified.
 
 | Check | Result | Platform / evidence |
 | --- | --- | --- |
 | Unchanged WQ Files v0.9.18 runner | Passed, including 32 Python tests and native suites | Four-CPU Intel macOS, Xcode 26.2; `upstream-baseline` job |
 | Optional upstream ffmpeg-video subcase | Skipped: ffmpeg unavailable | Removed Charony functionality; not device evidence |
-| Reviewed main portable suite | 42 tests passed | macOS; `tests/test_*.py` |
+| Current portable suite | 47 tests passed | macOS and Linux; `tests/test_*.py` |
 | Current native safety fixtures | All 10 executables passed | Arm64 macOS; `tests/run_all_tests.sh` |
 | Strict iOS syntax, compilation and linking | Passed with `-Wall -Wextra -Werror` | Arm64, Xcode / iOS SDK 26.2, deployment target 26.0 |
 | Source and compiled-binary privacy audits | Passed | Real built executable; `scripts/privacy_audit.py` |
 | Flat development icon / asset compilation | Passed | `actool`, compiled `Assets.car` |
 | Development IPA, metadata, exact App Group entitlement and ad-hoc signature | Passed | Real IPA; build verification and extracted signature check |
-| UIKit, lifecycle and cold-relaunch fixtures | Passed | Disposable iPhone 17 / iOS 26.2 simulator |
+| UIKit, mutations, lifecycle and cold relaunch | Passed, all four profiles | Disposable iPhone 17 and iPad Pro 13-inch M5 / iOS 26.2, Light/Dark, largest system accessibility text |
 | Downloaded final IPA structural/metadata recheck | Passed | Linux; `scripts/verify_ipa.py` |
 | Layered Icon Composer appearances | Incomplete | Flat icon only |
 | Final sideloaded signature, physical App Group/access and actual deletion | Unverified | No physical device tested |
 
-No required check failed in that run. Historical Linux baseline failures were missing-tool limitations, not established application defects. Native CI subsequently passed the unchanged baseline. See [safety coverage](docs/SAFETY.md#baseline-failures) for the classification.
+No required check failed in those runs. Downloaded artifact archives matched their GitHub SHA-256 digests. The actual IPA passed an independent package recheck and Mach-O inspection: arm64, iOS 26.0 minimum / SDK 26.2, exact App Group entitlement, no fixture-host markers, logging/network imports or runtime URLs. The XML entitlement DTD URL is signature metadata, not a network request. CI verified the ad-hoc signature before and after packaging; there is no embedded provisioning profile.
+
+The prior iPad `navigation-passed` timeout was reentrant navigation restoration inside UIKit's Search dismissal callback. Restoration now waits until the callback returns, with a regression asserting callback depth is zero. Query/model filter, selection and same-controller restoration remain required. No state or deadline was weakened.
+
+The simulator emitted IOSurface/CoreText notices and isolated unbalanced-navigation-appearance warnings despite passing functional assertions. Charony uses public system-font APIs; these test-host notices are not application logging. The precise appearance-warning origin still needs phase-trace review and device interaction checks. One read-only CoreSimulator inventory timeout recovered on the existing bounded retry. Deprecated entitlement-output syntax was replaced with explicit XML output; exact entitlement and failure-injection gates remain.
+
+The earlier reviewed main revision `286782c0e35747f3676de1af23e4b1addabd7944` independently passed [run 44606787990](https://github.com/micknorj/charony/actions/runs/44606787990). Historical Linux baseline failures were missing-tool limitations, not established application defects. Native CI subsequently passed the unchanged baseline. See [safety coverage](docs/SAFETY.md#baseline-failures) for the classification.
 
 ## Local checks
 
@@ -33,7 +39,7 @@ python3 scripts/privacy_audit.py
 bash -n build.sh scripts/sources.sh tests/run_all_tests.sh tests/run_scan_ui_tests.sh
 ```
 
-The current 47-test suite includes 19 source/package checks, seven POSIX build-pipeline methods, seven verified-baseline extraction methods and 14 toolchain-preflight methods. The reviewed main run above predates the four inventory-timeout regressions and executed 42 tests. Pipeline tests use command doubles for Apple tools; they do not replace native validation. Windows can run the source/package subset with `python -m unittest discover -s tests -p test_charony.py`; run POSIX fixtures in Cloud or macOS.
+The current 47-test suite includes 19 source/package checks, seven POSIX build-pipeline methods, seven verified-baseline extraction methods and 14 toolchain-preflight methods. The earlier main run executed 42 tests; the current total also includes the four inventory-timeout regressions and completed-state removal coverage. Pipeline tests use command doubles for Apple tools; they do not replace native validation. Windows can run the source/package subset with `python -m unittest discover -s tests -p test_charony.py`; run POSIX fixtures in Cloud or macOS.
 
 On macOS with Xcode 26.2 selected:
 
@@ -92,7 +98,7 @@ The required UIKit harness exercises production controllers, confirmation handle
 WQ_SIMULATOR_UDID=YOUR_DISPOSABLE_BOOTED_SIMULATOR bash tests/run_scan_ui_tests.sh
 ```
 
-Fixture roots and failure-injection hooks are compiled only into the test host. They do not establish real protected-app access or final device signing. Simulator failures retain bounded transition diagnostics rather than substituting outcomes. Marker timeouts retain the last fixture phase, native process stdout/stderr and a best-effort host stack sample; the required marker still fails the job. These diagnostics belong only to the test host.
+Fixture roots and failure-injection hooks are compiled only into the test host. They do not establish real protected-app access or final device signing. Simulator failures retain bounded transition diagnostics rather than substituting outcomes. Marker timeouts retain the timestamped fixture phase history, native process stdout/stderr and a best-effort host stack sample; the required marker still fails the job. These diagnostics belong only to the test host.
 
 ## Safety coverage
 

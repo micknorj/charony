@@ -28,7 +28,10 @@ static void phase(NSString *name)
 {
     NSString *documents = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
     [NSFileManager.defaultManager createDirectoryAtPath:documents withIntermediateDirectories:YES attributes:nil error:nil];
-    [name writeToFile:[documents stringByAppendingPathComponent:@"ui-phase.log"] atomically:YES encoding:NSUTF8StringEncoding error:nil];
+    NSString *path = [documents stringByAppendingPathComponent:@"ui-phase.log"];
+    NSString *history = [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:nil] ?: @"";
+    [[history stringByAppendingFormat:@"%@ %@\n", NSDate.date, name]
+        writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:nil];
 }
 static void fixtureException(NSException *exception)
 {
@@ -163,6 +166,7 @@ static void runTypographyFixtures(UIWindow *window, UITableViewController *contr
 // The former synchronous test switched tabs before Search became active.
 static void selectFixtureTab(UITabBarController *tabs, UITab *tab)
 {
+    phase([@"select-tab " stringByAppendingString:tab.identifier ?: @"nil"]);
     if ([tabs.delegate tabBarController:tabs shouldSelectTab:tab]) {
         UITab *previous = tabs.selectedTab;
         tabs.selectedTab = tab;
