@@ -17,3 +17,7 @@ outputs/
 *.provisionprofile
 .env
 .env.*
+
+# Generated CI provenance for the downloadable development IPA.
+charony-build.json
+charony.ipa.sha256

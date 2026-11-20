@@ -30,6 +30,10 @@ jobs:
             --output-partial-info-plist .icon-results/icon-info.plist --errors --warnings \
             --output-format human-readable-text 2>&1 | tee .icon-results/compile.log
           bash tests/run_icon_tests.sh
+          "$TOOL" icons/AppIcon.icon --export-image --output-file .icon-results/clear-light.png \
+            --platform iOS --rendition ClearLight --width 1024 --height 1024 --scale 1
+          "$TOOL" icons/AppIcon.icon --export-image --output-file .icon-results/clear-dark.png \
+            --platform iOS --rendition ClearDark --width 1024 --height 1024 --scale 1
           xcrun --find assetutil
           xcrun assetutil --info .icon-results/compiled/Assets.car > .icon-results/asset-info.json
       - name: Retain native tool evidence

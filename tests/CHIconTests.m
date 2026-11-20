@@ -11,7 +11,8 @@ int main(int argc, const char *argv[])
     @autoreleasepool {
         if (argc != 7) return 2;
         for (int i = 1; i < argc; i++) {
-            NSBitmapImageRep *image = [NSBitmapImageRep imageRepWithContentsOfFile:[NSString stringWithUTF8String:argv[i]]];
+            NSData *encoded = [NSData dataWithContentsOfFile:[NSString stringWithUTF8String:argv[i]]];
+            NSBitmapImageRep *image = encoded ? [[NSBitmapImageRep alloc] initWithData:encoded] : nil;
             if (!image || image.pixelsWide != 1024 || image.pixelsHigh != 1024) return 3;
             if (i <= 2) {
                 // A buried detail layer rendered as a blank coin. Compare a
