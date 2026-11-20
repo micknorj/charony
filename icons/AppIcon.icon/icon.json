@@ -1,0 +1,139 @@
+{
+  "color-space-for-untagged-svg-colors": "srgb",
+  "fill-specializations": [
+    {
+      "value": {
+        "solid": "srgb:0.12941,0.15686,0.19216,1.00000"
+      }
+    },
+    {
+      "appearance": "dark",
+      "value": {
+        "solid": "srgb:0.04314,0.05490,0.07451,1.00000"
+      }
+    }
+  ],
+  "groups": [
+    {
+      "name": "01 Moon",
+      "layers": [
+        {
+          "image-name": "01-moon.svg",
+          "name": "01-moon",
+          "fill-specializations": [
+            {
+              "value": {
+                "solid": "srgb:0.81176,0.83529,0.84706,1.00000"
+              }
+            },
+            {
+              "appearance": "dark",
+              "value": {
+                "solid": "srgb:0.66275,0.70588,0.73333,1.00000"
+              }
+            },
+            {
+              "appearance": "tinted",
+              "value": {
+                "solid": "gray:0.85000,1.00000"
+              }
+            }
+          ],
+          "glass": true
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.2
+      },
+      "specular": true,
+      "translucency": {
+        "enabled": true,
+        "value": 0.18
+      }
+    },
+    {
+      "name": "02 Terrain",
+      "layers": [
+        {
+          "image-name": "02-terrain.svg",
+          "name": "02-terrain",
+          "fill-specializations": [
+            {
+              "value": {
+                "solid": "srgb:0.48627,0.51373,0.54510,1.00000"
+              }
+            },
+            {
+              "appearance": "dark",
+              "value": {
+                "solid": "srgb:0.34510,0.38431,0.42745,1.00000"
+              }
+            },
+            {
+              "appearance": "tinted",
+              "value": {
+                "solid": "gray:0.35000,1.00000"
+              }
+            }
+          ],
+          "glass": false
+        }
+      ],
+      "opacity": 0.14,
+      "shadow": {
+        "kind": "none",
+        "opacity": 0
+      },
+      "specular": false,
+      "translucency": {
+        "enabled": false,
+        "value": 0.5
+      }
+    },
+    {
+      "name": "03 Craters",
+      "layers": [
+        {
+          "image-name": "03-craters.svg",
+          "name": "03-craters",
+          "fill-specializations": [
+            {
+              "value": {
+                "solid": "srgb:0.36471,0.40784,0.45098,1.00000"
+              }
+            },
+            {
+              "appearance": "dark",
+              "value": {
+                "solid": "srgb:0.27059,0.30980,0.35294,1.00000"
+              }
+            },
+            {
+              "appearance": "tinted",
+              "value": {
+                "solid": "gray:0.25000,1.00000"
+              }
+            }
+          ],
+          "glass": false
+        }
+      ],
+      "opacity": 0.16,
+      "shadow": {
+        "kind": "none",
+        "opacity": 0
+      },
+      "specular": false,
+      "translucency": {
+        "enabled": false,
+        "value": 0.5
+      }
+    }
+  ],
+  "supported-platforms": {
+    "squares": [
+      "iOS"
+    ]
+  }
+}
