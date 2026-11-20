@@ -67,13 +67,20 @@ jobs:
         env:
           SIMULATOR_RUNTIME: ${{ steps.toolchain.outputs.simulator_runtime }}
           SIMULATOR_DEVICE_TYPE: ${{ steps.toolchain.outputs.simulator_device_type }}
+          SIMULATOR_IPAD_DEVICE_TYPE: ${{ steps.toolchain.outputs.simulator_ipad_device_type }}
         run: |
           set -euo pipefail
-          DEVICE=$(xcrun simctl create charony-fixtures "$SIMULATOR_DEVICE_TYPE" "$SIMULATOR_RUNTIME")
-          trap 'xcrun simctl delete "$DEVICE"' EXIT
-          xcrun simctl boot "$DEVICE"
-          xcrun simctl bootstatus "$DEVICE" -b
-          WQ_SIMULATOR_UDID="$DEVICE" bash tests/run_scan_ui_tests.sh 2>&1 | tee .ci-results/simulator.log
+          DEVICE=""
+          trap 'if [[ -n "$DEVICE" ]]; then xcrun simctl delete "$DEVICE"; fi' EXIT
+          for TYPE in "$SIMULATOR_DEVICE_TYPE" "$SIMULATOR_IPAD_DEVICE_TYPE"; do
+            DEVICE=$(xcrun simctl create charony-fixtures "$TYPE" "$SIMULATOR_RUNTIME")
+            xcrun simctl boot "$DEVICE"
+            xcrun simctl bootstatus "$DEVICE" -b
+            WQ_SIMULATOR_UDID="$DEVICE" bash tests/run_scan_ui_tests.sh 2>&1 | tee -a .ci-results/simulator.log
+            xcrun simctl shutdown "$DEVICE"
+            xcrun simctl delete "$DEVICE"
+            DEVICE=""
+          done
       - name: Retain Charony diagnostics even on failure
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

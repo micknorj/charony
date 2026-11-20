@@ -10,16 +10,21 @@ NS_ASSUME_NONNULL_BEGIN
 @protocol CHSearchable <UISearchResultsUpdating>
 @property (nonatomic, readonly) UISearchController *contextSearchController;
 @end
+@protocol CHContextAlertPresentation <NSObject>
+- (BOOL)presentContextAlert:(UIAlertController *)alert from:(UIViewController *)host;
+@end
 
 
-static inline UIBarButtonItemStyle wq_primary_button_style(void)
-{
-    if (@available(iOS 26.0, *)) return UIBarButtonItemStyleProminent;
-    return UIBarButtonItemStylePlain;
-}
+// Respect smaller system text sizes and cap application text at normal (Large).
+void wq_configure_window(UIWindow *window);
+UIFont *wq_font(UIFontTextStyle style, UITraitCollection *traits);
+void wq_prepare_list(UITableViewController *host, NSString *title);
+void wq_empty_message(UITableView *table, NSString *_Nullable message);
+UIBarButtonItem *wq_refresh_button(id target, SEL action, BOOL enabled);
 
 dispatch_queue_t wq_io(void);
 void wq_alert(UIViewController *host, NSString *title, NSString *_Nullable message);
+void wq_present_confirmation(UIViewController *host, UIAlertController *alert);
 // title/message/action titles are localization keys. Pass already-localized
 // text and raw data (names, keys, error strings) as WQVerbatim(text) so it is
 // shown exactly and never looked up a second time.

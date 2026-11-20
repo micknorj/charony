@@ -9,13 +9,15 @@
 // UISearchTab supplies the native trailing search affordance. The selected
 // controller moves into its navigation stack for search, keeping selections
 // and scan state in the same controller instance.
-@interface CHTabs : UITabBarController <UITabBarControllerDelegate, UISearchControllerDelegate>
+@interface CHTabs : UITabBarController <UITabBarControllerDelegate, UISearchControllerDelegate, CHContextAlertPresentation>
 @property (nonatomic, strong) UITab *contextTab;
 @property (nonatomic, strong) UITab *pendingTab;
 @property (nonatomic, strong) UISearchTab *searchTab;
 @property (nonatomic, strong) UINavigationController *contextNavigation;
 @property (nonatomic, strong) UINavigationController *searchNavigation;
 @property (nonatomic, strong) UITableViewController *searchRoot;
+@property (nonatomic, strong) UIAlertController *contextAlert;
+@property (nonatomic, weak) UIViewController *contextAlertHost;
 @end
 @implementation CHTabs
 - (void)viewDidLoad
@@ -23,6 +25,8 @@
     [super viewDidLoad];
     self.delegate = self;
     self.mode = UITabBarControllerModeTabBar;
+    // Keep UIKit's native bottom tabs and trailing Search on supported iPads.
+    self.traitOverrides.horizontalSizeClass = UIUserInterfaceSizeClassCompact;
     UINavigationController *apps = [[UINavigationController alloc] initWithRootViewController:[WQAppsViewController new]];
     UINavigationController *caches = [[UINavigationController alloc] initWithRootViewController:[WQCacheCleanerViewController new]];
     UITab *appsTab = [[UITab alloc] initWithTitle:@"Apps" image:[UIImage systemImageNamed:@"square.grid.2x2"] identifier:@"apps" viewControllerProvider:^UIViewController *(UITab *__unused tab) { return apps; }];
@@ -88,7 +92,25 @@
         self.pendingTab = nil;
         [self restoreContext];
         self.selectedTab = context;
+        UIAlertController *alert = self.contextAlert;
+        UIViewController *host = self.contextAlertHost;
+        self.contextAlert = nil;
+        self.contextAlertHost = nil;
+        if (alert && host) dispatch_async(dispatch_get_main_queue(), ^{
+            // A pending confirmation never follows the user to another tab.
+            if (host.view.window && host.navigationController.topViewController == host && !host.presentedViewController)
+                [host presentViewController:alert animated:YES completion:nil];
+        });
     }
+}
+- (BOOL)presentContextAlert:(UIAlertController *)alert from:(UIViewController *)host
+{
+    if (host != self.searchRoot) return NO;
+    if (self.contextAlert || self.pendingTab) return YES;
+    self.contextAlert = alert;
+    self.contextAlertHost = host;
+    self.searchRoot.navigationItem.searchController.active = NO;
+    return YES;
 }
 @end
 
@@ -123,12 +145,13 @@ static BOOL CHConfirmFullScan(NSString *what, int64_t ids, double seconds)
     (void)session;
     (void)options;
     self.window = [[UIWindow alloc] initWithWindowScene:(UIWindowScene *)scene];
+    wq_configure_window(self.window);
     NSString *failure = wq_access_capability_failure();
     if (failure) {
         UIViewController *blocked = [UIViewController new];
         blocked.view.backgroundColor = UIColor.systemBackgroundColor;
         UILabel *message = [UILabel new];
-        message.font = [UIFont preferredFontForTextStyle:UIFontTextStyleBody];
+        message.font = wq_font(UIFontTextStyleBody, self.window.traitCollection);
         message.adjustsFontForContentSizeCategory = YES;
         message.numberOfLines = 0;
         message.text = failure;

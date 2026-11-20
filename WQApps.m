@@ -172,20 +172,38 @@ static BOOL wq_dir_size_cancellable(NSString *dir, NSString *taskID, WQScanCance
     _status = _scanning ? (_scanTask.paused ? WQLocalized(@"Scan paused") :
         (_scanTask.status.length ? WQLocalized(_scanTask.status) : WQLocalized(@"Scan queued; previous results kept"))) :
         (_scanTask.status.length ? WQLocalized(_scanTask.status) : note);
-    if (_scanTask.finishedAt) {
-        NSString *date = [NSDateFormatter localizedStringFromDate:_scanTask.finishedAt dateStyle:NSDateFormatterShortStyle timeStyle:NSDateFormatterShortStyle];
-        self.navigationItem.prompt = WQLocalizedFormat(@"Last scanned %@ · Pull to refresh", date);
-    }
     _busy = _scanning;
-    if (_scanTask.persistenceFailed) self.navigationItem.prompt = WQLocalized(@"Could not save scan state. Keep charony open.");
     if (!_scanning) [self.refreshControl endRefreshing];
-    [self.tableView reloadData];
-    NSMutableArray *buttons = [NSMutableArray arrayWithObject:[self sortButton]];
-    if (_scanTask.running || _scanTask.userPaused) {
-        [buttons insertObject:[[UIBarButtonItem alloc] initWithTitle:WQLocalized(_scanTask.running ? @"Pause Scan" : @"Resume Scan")
-            style:UIBarButtonItemStylePlain target:self action:@selector(toggleScan)] atIndex:0];
+    [self updatePresentation];
+}
+
+- (void)updatePresentation
+{
+    NSString *message = [self statusText];
+    if (!self.visibleApps.count && !message.length) {
+        message = (_query.length || _filter > 0) ? @"No results" :
+            (_shownScanResult ? @"No accessible apps" : @"Refresh to update");
     }
-    self.navigationItem.rightBarButtonItems = buttons;
+    wq_empty_message(self.tableView, self.visibleApps.count ? nil : message);
+    [self.tableView reloadData];
+    [self updateButtons];
+}
+
+- (NSString *)statusText
+{
+    if (_scanTask.persistenceFailed) return @"Could not save scan state. Keep charony open.";
+    if (_status.length) return _status;
+    if (_scanTask.interrupted) return @"Scan interrupted. Resume to continue.";
+    return nil;
+}
+
+- (void)updateButtons
+{
+    UIBarButtonItem *menu = [self sortButton];
+    menu.accessibilityLabel = @"Filters and scan controls";
+    menu.accessibilityIdentifier = @"filters";
+    menu.enabled = !_busy || _scanning;
+    self.navigationItem.rightBarButtonItems = @[menu, wq_refresh_button(self, @selector(userRefresh), !_busy || _scanning)];
 }
 
 - (void)toggleScan
@@ -203,24 +221,11 @@ static BOOL wq_dir_size_cancellable(NSString *dir, NSString *taskID, WQScanCance
 {
     [super viewDidLoad];
     _fraction = -1;
-    self.title = WQLocalizedNullable(@"Apps");
-    self.tableView.sectionHeaderHeight = UITableViewAutomaticDimension;
-    self.tableView.estimatedSectionHeaderHeight = 44;
-    // A plain table's section footer floats over its rows. Keep the wrapping
-    // safety guidance after the list, including at accessibility text sizes.
-    self.tableView.sectionFooterHeight = 0;
-    self.tableView.estimatedSectionFooterHeight = 0;
-    UITableViewHeaderFooterView *footer = [[UITableViewHeaderFooterView alloc] initWithReuseIdentifier:nil];
-    UIListContentConfiguration *guidance = [UIListContentConfiguration footerConfiguration];
-    guidance.text = @"Tap an app to confirm permanent clearing. Close it first. Safari and Messages cleanup is best effort.";
-    guidance.textProperties.numberOfLines = 0;
-    footer.contentConfiguration = guidance;
-    self.tableView.tableFooterView = footer;
+    wq_prepare_list(self, @"Apps");
     UISearchController *search = [[UISearchController alloc] initWithSearchResultsController:nil];
     search.searchResultsUpdater = self;
     search.obscuresBackgroundDuringPresentation = NO;
     search.searchBar.placeholder = WQLocalizedNullable(@"Search apps");
-    self.navigationItem.rightBarButtonItem = [self sortButton];
     _contextSearchController = search;
     self.definesPresentationContext = YES;
     self.refreshControl = [UIRefreshControl new];
@@ -230,37 +235,12 @@ static BOOL wq_dir_size_cancellable(NSString *dir, NSString *taskID, WQScanCance
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(applicationDidBecomeActive:) name:UIApplicationDidBecomeActiveNotification object:nil];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(contentSizeChanged:) name:UIContentSizeCategoryDidChangeNotification object:nil];
     [self scanTaskChanged:nil];
-    if (!_scanTask.running && !_scanTask.userPaused && (!_scanTask.result || _scanTask.interrupted)) {
-        _resumeScan = _scanTask.interrupted;
-        [self scan];
-    }
-}
-
-- (void)viewDidLayoutSubviews
-{
-    [super viewDidLayoutSubviews];
-    UITableViewHeaderFooterView *footer = (UITableViewHeaderFooterView *)self.tableView.tableFooterView;
-    CGFloat width = CGRectGetWidth(self.tableView.bounds);
-    if (!footer || width <= 0) return;
-    CGRect frame = footer.frame;
-    frame.size.width = width;
-    footer.frame = frame;
-    [footer setNeedsLayout];
-    [footer layoutIfNeeded];
-    CGSize size = [footer.contentView systemLayoutSizeFittingSize:CGSizeMake(width, UILayoutFittingCompressedSize.height)
-        withHorizontalFittingPriority:UILayoutPriorityRequired verticalFittingPriority:UILayoutPriorityFittingSizeLevel];
-    CGFloat height = ceil(size.height);
-    if (fabs(CGRectGetHeight(footer.frame) - height) > 0.5) {
-        frame.size.height = height;
-        footer.frame = frame;
-        self.tableView.tableFooterView = footer;
-    }
 }
 
 - (void)contentSizeChanged:(NSNotification *)notification
 {
-    [self.tableView reloadData];
-    [self.view setNeedsLayout];
+    [self updatePresentation];
+    ((UILabel *)self.navigationItem.leftBarButtonItem.customView).font = wq_font(UIFontTextStyleHeadline, self.traitCollection);
 }
 
 // Pull to refresh: rescan the containers instead of reusing the shared scan,
@@ -283,10 +263,8 @@ static BOOL wq_dir_size_cancellable(NSString *dir, NSString *taskID, WQScanCance
     _busy = busy;
     _status = status;
     _fraction = -1;
-    [self.tableView reloadData];
+    [self updatePresentation];
 }
-
-// Watchdog for the app scan: each step records what it's doing; a timer logs
 - (void)scan
 {
     if (_busy && !_scanning) { [self.refreshControl endRefreshing]; return; }
@@ -342,7 +320,7 @@ static BOOL wq_dir_size_cancellable(NSString *dir, NSString *taskID, WQScanCance
             });
         }
         NSString *note = !wq_app_group() ? @"An App Group is required. Re-sign charony with a tool that preserves its App Group entitlement." :
-            !containers ? @"App discovery failed or was cancelled. Pull to refresh to try again." : nil;
+            !containers ? @"App discovery failed or was cancelled. Refresh to retry." : nil;
         dispatch_async(dispatch_get_main_queue(), ^{
             if (generation != self->_scanGeneration || cancellation.isCancelled) return;
             NSMutableDictionary *snapshot = [[self snapshotRows:apps note:note] mutableCopy];
@@ -449,16 +427,21 @@ static BOOL wq_dir_size_cancellable(NSString *dir, NSString *taskID, WQScanCance
             [filters addObject:f];
         }
         UIMenu *show = [UIMenu menuWithTitle:WQLocalizedNullable(@"Show") image:nil identifier:nil options:UIMenuOptionsDisplayInline children:filters];
-        completion(@[sort, show]);
+        NSMutableArray<UIMenuElement *> *sections = [NSMutableArray arrayWithObjects:sort, show, nil];
+        if (strongSelf && (strongSelf->_scanTask.running || strongSelf->_scanTask.userPaused || strongSelf->_scanTask.interrupted)) {
+            UIAction *scan = [UIAction actionWithTitle:strongSelf->_scanTask.running ? @"Pause Scan" : @"Resume Scan" image:nil identifier:nil handler:^(UIAction *__unused action) { [weakSelf toggleScan]; }];
+            [sections addObject:scan];
+        }
+        completion(sections);
     }];
-    return [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"line.3.horizontal.decrease.circle"]
+    return [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"ellipsis"]
                                              menu:[UIMenu menuWithChildren:@[items]]];
 }
 
 - (void)resortApps
 {
     [self rebuildVisibleApps];
-    [self.tableView reloadData];
+    [self updatePresentation];
     [self.tableView reloadSectionIndexTitles];
 }
 
@@ -466,7 +449,7 @@ static BOOL wq_dir_size_cancellable(NSString *dir, NSString *taskID, WQScanCance
 {
     _query = [searchController.searchBar.text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet];
     [self rebuildVisibleApps];
-    [self.tableView reloadData];
+    [self updatePresentation];
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
@@ -478,39 +461,13 @@ static BOOL wq_dir_size_cancellable(NSString *dir, NSString *taskID, WQScanCance
 
 - (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section
 {
-    if (_status && _fraction >= 0) {
-        WQProgressHeaderView *header = [tableView dequeueReusableHeaderFooterViewWithIdentifier:@"progress"]
-            ?: [[WQProgressHeaderView alloc] initWithReuseIdentifier:@"progress"];
-        [header setText:_status fraction:_fraction];
-        return header;
-    }
-    NSString *text = [self tableView:tableView titleForHeaderInSection:section];
-    if (!text.length) return nil;
-    UITableViewHeaderFooterView *header = [tableView dequeueReusableHeaderFooterViewWithIdentifier:@"status"]
-        ?: [[UITableViewHeaderFooterView alloc] initWithReuseIdentifier:@"status"];
-    UIListContentConfiguration *content = [UIListContentConfiguration headerConfiguration];
-    content.text = text;
-    content.textProperties.numberOfLines = 0;
-    header.contentConfiguration = content;
+    (void)section;
+    NSString *status = [self statusText];
+    if (!self.visibleApps.count || !status.length) return nil;
+    WQProgressHeaderView *header = [tableView dequeueReusableHeaderFooterViewWithIdentifier:@"progress"]
+        ?: [[WQProgressHeaderView alloc] initWithReuseIdentifier:@"progress"];
+    [header setText:status fraction:_fraction];
     return header;
-}
-
-- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section
-{
-    // The progress header draws the status itself; a title here would be drawn
-    // into it a second time (overlapping text).
-    if (_status && _fraction >= 0) return nil;
-    if (_status) return _status;
-    unsigned long long total = 0;
-    BOOL complete = YES;
-    for (WQAppItem *a in _apps) { total += a.bytes; if (!a.sizeKnown) complete = NO; }
-    if (_query.length || _filter > 0)
-        return WQLocalizedFormat(@"%lu of %lu apps", (unsigned long)self.visibleApps.count, (unsigned long)_apps.count);
-    if (!complete)
-        return WQLocalizedFormat(_apps.count == 1 ? @"%lu app · %@ measured (size incomplete)" : @"%lu apps · %@ measured (size incomplete)",
-                                 (unsigned long)_apps.count, wq_size_text(total));
-    return WQLocalizedFormat(_apps.count == 1 ? @"%lu app · %@ of app data" : @"%lu apps · %@ of app data",
-                             (unsigned long)_apps.count, wq_size_text(total));
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
@@ -519,11 +476,15 @@ static BOOL wq_dir_size_cancellable(NSString *dir, NSString *taskID, WQScanCance
     WQAppItem *app = self.visibleApps[(NSUInteger)indexPath.row];
     UIListContentConfiguration *content = [UIListContentConfiguration subtitleCellConfiguration];
     content.text = app.name;
-    content.secondaryText = [NSString stringWithFormat:@"%@ · %@%@", app.bundleID, app.sizeKnown ? wq_size_text(app.bytes) : @"size incomplete", app.installState == WQInstallOffloaded ? @" · offloaded" : @""];
-    content.secondaryTextProperties.numberOfLines =
-        UIContentSizeCategoryIsAccessibilityCategory(self.traitCollection.preferredContentSizeCategory) ? 0 : 2;
+    NSString *size = app.sizeKnown ? wq_size_text(app.bytes) : [NSString stringWithFormat:@"%@ measured · size incomplete", wq_size_text(app.bytes)];
+    content.secondaryText = [NSString stringWithFormat:@"%@\n%@%@", app.bundleID, size, app.installState == WQInstallOffloaded ? @" · offloaded" : @""];
+    content.textProperties.font = wq_font(UIFontTextStyleBody, self.traitCollection);
+    content.secondaryTextProperties.font = wq_font(UIFontTextStyleFootnote, self.traitCollection);
+    content.textProperties.numberOfLines = 0;
+    content.secondaryTextProperties.numberOfLines = 0;
+    content.directionalLayoutMargins = NSDirectionalEdgeInsetsMake(12, 16, 12, 16);
     content.image = wq_app_icon(app.bundleID);
-    content.imageProperties.maximumSize = CGSizeMake(32, 32);
+    content.imageProperties.maximumSize = CGSizeMake(40, 40);
     cell.contentConfiguration = content;
     cell.accessibilityIdentifier = [@"app." stringByAppendingString:app.bundleID];
     return cell;
@@ -535,12 +496,12 @@ static BOOL wq_dir_size_cancellable(NSString *dir, NSString *taskID, WQScanCance
     if (_pendingClearTitle) { [self presentPendingClearResult]; return; }
     WQAppItem *app = self.visibleApps[(NSUInteger)indexPath.row];
     UIAlertController *alert = wq_alert_controller([NSString stringWithFormat:@"Clear %@?", app.name],
-        @"Permanently empties this app's Documents, Library and tmp. Logins, settings and offline content are lost. No backup is created. Close the app first. Safari and Messages cleanup is best effort and may leave data in other containers.", UIAlertControllerStyleAlert);
+        @"Permanently empties Documents, Library and tmp. Logins, settings and offline content will be lost. No backup is created. Close the app first. Safari and Messages cleanup is best effort; other data may remain.", UIAlertControllerStyleAlert);
     [alert addAction:wq_alert_action(@"Cancel", UIAlertActionStyleCancel, nil)];
     [alert addAction:wq_alert_action(@"Clear Data", UIAlertActionStyleDestructive, ^(UIAlertAction *__unused action) {
         [self dismissViewControllerAnimated:YES completion:^{ [self clear:app]; }];
     })];
-    [self presentViewController:alert animated:YES completion:nil];
+    wq_present_confirmation(self, alert);
 }
 - (void)clear:(WQAppItem *)app
 {

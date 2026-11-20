@@ -22,14 +22,9 @@ codesign --force --sign - "$APP"
 BUNDLE=io.github.micknorj.charony.ui-fixtures
 xcrun simctl install "$WQ_SIMULATOR_UDID" "$APP"
 DATA=$(xcrun simctl get_app_container "$WQ_SIMULATOR_UDID" "$BUNDLE" data)
-# Markers must belong to this run. The installed fixture bundle is test-only.
-rm -f -- "$DATA/Documents/ready-for-background" "$DATA/Documents/background-paused" \
-    "$DATA/Documents/ready-to-terminate" "$DATA/Documents/recovery-passed" \
-    "$DATA/Documents/search-navigation.log" "$DATA/Documents/footer-layout.log" \
-    "$DATA/Documents/cache-footer-layout.log" "$DATA/Documents/FAIL-"*
 retain_diagnostics() {
     local diagnostic
-    for diagnostic in search-navigation footer-layout cache-footer-layout; do
+    for diagnostic in search-navigation ui-layout; do
         if [[ -f "$DATA/Documents/$diagnostic.log" ]]; then
             cp "$DATA/Documents/$diagnostic.log" "$OUT/$diagnostic.log"
             cat "$OUT/$diagnostic.log"
@@ -50,15 +45,25 @@ wait_marker() {
     printf 'UIKit fixture harness timed out waiting for %s\n' "$marker" >&2
     return 1
 }
-xcrun simctl launch "$WQ_SIMULATOR_UDID" "$BUNDLE"
-wait_marker ready-for-background
-xcrun simctl launch "$WQ_SIMULATOR_UDID" com.apple.Preferences
-wait_marker background-paused
-xcrun simctl launch "$WQ_SIMULATOR_UDID" "$BUNDLE"
-wait_marker ready-to-terminate
-xcrun simctl terminate "$WQ_SIMULATOR_UDID" "$BUNDLE"
-xcrun simctl launch "$WQ_SIMULATOR_UDID" "$BUNDLE" recover
-wait_marker recovery-passed
-retain_diagnostics
-xcrun simctl terminate "$WQ_SIMULATOR_UDID" "$BUNDLE"
-printf 'UIKit, lifecycle and cold-relaunch fixtures passed. Artifacts in %s\n' "$OUT"
+for APPEARANCE in light dark; do
+    printf 'UIKit fixtures: device=%s appearance=%s system-text=accessibility-extra-extra-extra-large\n' "$WQ_SIMULATOR_UDID" "$APPEARANCE"
+    xcrun simctl ui "$WQ_SIMULATOR_UDID" appearance "$APPEARANCE"
+    xcrun simctl ui "$WQ_SIMULATOR_UDID" content_size accessibility-extra-extra-extra-large
+    # Markers and diagnostics must belong to this run, not the previous profile.
+    rm -f -- "$DATA/Documents/ready-for-background" "$DATA/Documents/background-paused" \
+        "$DATA/Documents/ready-to-terminate" "$DATA/Documents/recovery-passed" \
+        "$DATA/Documents/search-navigation.log" "$DATA/Documents/ui-layout.log" "$DATA/Documents/FAIL-"*
+    SIMCTL_CHILD_CH_EXPECTED_APPEARANCE="$APPEARANCE" xcrun simctl launch "$WQ_SIMULATOR_UDID" "$BUNDLE"
+    wait_marker ready-for-background
+    xcrun simctl launch "$WQ_SIMULATOR_UDID" com.apple.Preferences
+    wait_marker background-paused
+    xcrun simctl launch "$WQ_SIMULATOR_UDID" "$BUNDLE"
+    wait_marker ready-to-terminate
+    xcrun simctl terminate "$WQ_SIMULATOR_UDID" "$BUNDLE"
+    SIMCTL_CHILD_CH_EXPECTED_APPEARANCE="$APPEARANCE" xcrun simctl launch "$WQ_SIMULATOR_UDID" "$BUNDLE" recover
+    wait_marker recovery-passed
+    retain_diagnostics
+    xcrun simctl terminate "$WQ_SIMULATOR_UDID" "$BUNDLE"
+    printf 'UIKit, mutation, lifecycle and cold-relaunch fixtures: PASS (%s)\n' "$APPEARANCE"
+done
+printf 'Logs retained in %s\n' "$OUT"

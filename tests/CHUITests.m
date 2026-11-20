@@ -36,59 +36,60 @@ static NSString *visibleLabelText(UIView *view)
     for (UIView *child in view.subviews) [parts addObject:visibleLabelText(child)];
     return [parts componentsJoinedByString:@" "];
 }
-static NSString *renderedFooterText(UITableView *table, NSInteger section)
+static void checkRowLayout(UITableView *table, NSIndexPath *index)
 {
+    [table scrollToRowAtIndexPath:index atScrollPosition:UITableViewScrollPositionMiddle animated:NO];
     [table layoutIfNeeded];
-    UITableViewHeaderFooterView *footer = [table footerViewForSection:section];
-    BOOL attachedBefore = footer.window != nil;
-    // At accessibility sizes the summary and row can fill the viewport.
-    // UIKit only creates a section footer when it enters that viewport.
-    if (!attachedBefore)
-        [table scrollRectToVisible:[table rectForFooterInSection:section] animated:NO];
-    [table layoutIfNeeded];
-    footer = [table footerViewForSection:section];
-    NSString *path = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject stringByAppendingPathComponent:@"cache-footer-layout.log"];
-    NSDictionary *geometry = @{@"attachedBefore":@(attachedBefore), @"attachedAfter":@(footer.window != nil),
-        @"category":table.traitCollection.preferredContentSizeCategory,
-        @"footer":NSStringFromCGRect([table rectForFooterInSection:section]),
-        @"viewport":NSStringFromCGRect(table.bounds)};
-    NSString *line = [[NSString alloc] initWithData:[NSJSONSerialization dataWithJSONObject:geometry options:0 error:nil] encoding:NSUTF8StringEncoding];
-    NSString *previous = [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:nil] ?: @"";
-    [[previous stringByAppendingFormat:@"%@\n", line] writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:nil];
-    check(footer.window != nil, @"cache-footer-is-rendered-in-the-actual-viewport");
-    return visibleLabelText(footer);
-}
-static void runAccessibleCacheLayoutFixture(void)
-{
-    WQCleanerCell *cell = [[WQCleanerCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:nil];
-    cell.accessibilityLayout = YES;
-    cell.nameLabel.text = @"Example Maps (disposable fixture)";
-    cell.detailLabel.text = @"cache 131 KB · temp 131 KB · access limited";
-    cell.sizeLabel.text = @"262 KB";
-    cell.nameLabel.font = [UIFont systemFontOfSize:53];
-    cell.detailLabel.font = [UIFont systemFontOfSize:43];
-    cell.sizeLabel.font = [UIFont systemFontOfSize:40];
-    cell.frame = CGRectMake(0, 0, 375, 1000);
-    [cell layoutIfNeeded];
-    CGSize size = [cell.contentView systemLayoutSizeFittingSize:CGSizeMake(375, 0)
-        withHorizontalFittingPriority:UILayoutPriorityRequired verticalFittingPriority:UILayoutPriorityFittingSizeLevel];
-    cell.frame = CGRectMake(0, 0, 375, ceil(size.height));
-    [cell setNeedsLayout];
-    [cell layoutIfNeeded];
-    for (UILabel *label in @[cell.nameLabel, cell.detailLabel]) {
-        CGSize text = [label sizeThatFits:CGSizeMake(CGRectGetWidth(label.bounds), CGFLOAT_MAX)];
-        check(label.numberOfLines == 0 && CGRectGetHeight(label.bounds) + 1 >= text.height,
-              @"accessible-cache-name-and-scope-fit-without-truncation");
+    UITableViewCell *cell = [table cellForRowAtIndexPath:index];
+    check(cell.window != nil && CGRectGetHeight(cell.bounds) >= 70, @"comfortable-row-is-rendered-in-the-actual-window");
+    UIListContentConfiguration *content = (UIListContentConfiguration *)cell.contentConfiguration;
+    check(content.textProperties.font.pointSize <= 17.01 && content.secondaryTextProperties.font.pointSize <= 13.01,
+          @"app-controlled-row-fonts-are-capped-at-normal-size");
+    check(content.textProperties.numberOfLines == 0 && content.secondaryTextProperties.numberOfLines == 0,
+          @"name-identifier-and-size-can-wrap");
+    NSMutableArray<UIView *> *pending = [NSMutableArray arrayWithObject:cell.contentView];
+    NSUInteger labels = 0;
+    while (pending.count) {
+        UIView *view = pending.lastObject; [pending removeLastObject];
+        [pending addObjectsFromArray:view.subviews];
+        if (![view isKindOfClass:UILabel.class] || view.hidden) continue;
+        UILabel *label = (UILabel *)view;
+        if (!label.text.length) continue;
+        labels++;
+        check(label.font.pointSize <= 17.01, @"rendered-row-label-never-exceeds-normal-system-size");
+        CGSize needed = [label sizeThatFits:CGSizeMake(label.bounds.size.width, CGFLOAT_MAX)];
+        CGRect rect = [label convertRect:label.bounds toView:cell.contentView];
+        check(needed.height <= label.bounds.size.height + 1 && CGRectGetMinX(rect) >= -1 &&
+              CGRectGetMaxX(rect) <= cell.contentView.bounds.size.width + 1 &&
+              CGRectGetMaxY(rect) <= cell.contentView.bounds.size.height + 1,
+              @"rendered-row-text-fits-without-clipping");
     }
-    check(CGRectGetMinY(cell.detailLabel.frame) >= CGRectGetMaxY(cell.nameLabel.frame) &&
-          CGRectGetMinY(cell.sizeLabel.frame) >= CGRectGetMaxY(cell.detailLabel.frame),
-          @"accessible-cache-labels-stack-without-overlap");
-    check(CGRectGetMaxX(cell.sizeLabel.frame) <= 375 && CGRectGetWidth(cell.sizeLabel.frame) > 0,
-          @"accessible-cache-size-remains-visible");
-    cell.accessibilityLayout = NO;
-    check(cell.nameLabel.numberOfLines == 1 && cell.detailLabel.numberOfLines == 1,
-          @"reused-cache-cell-restores-compact-layout");
+    check(labels >= 2, @"actual-name-identifier-and-size-labels-are-present");
 }
+static void runTypographyFixtures(UIWindow *window, UITableViewController *controller)
+{
+    // Emulate both system extremes. The workflow also sets the real simulator
+    // preference before launch. These are assertions, not image captures.
+    window.traitOverrides.preferredContentSizeCategory = UIContentSizeCategoryAccessibilityExtraExtraExtraLarge;
+    [window layoutIfNeeded];
+    [controller.tableView reloadData];
+    checkRowLayout(controller.tableView, [NSIndexPath indexPathForRow:0 inSection:0]);
+    UILabel *title = (UILabel *)controller.navigationItem.leftBarButtonItem.customView;
+    check(title.font.pointSize <= 17.01 && [controller.navigationItem.title isEqualToString:@""], @"small-leading-title-replaces-large-centered-title");
+    UIFont *large = wq_font(UIFontTextStyleBody, [UITraitCollection traitCollectionWithPreferredContentSizeCategory:UIContentSizeCategoryAccessibilityExtraExtraExtraLarge]);
+    UIFont *small = wq_font(UIFontTextStyleBody, [UITraitCollection traitCollectionWithPreferredContentSizeCategory:UIContentSizeCategoryExtraSmall]);
+    check(large.pointSize == 17 && small.pointSize < large.pointSize, @"font-limit-allows-smaller-system-sizes");
+    window.traitOverrides.preferredContentSizeCategory = UIContentSizeCategoryExtraSmall;
+    [window layoutIfNeeded];
+    [controller.tableView reloadData];
+    UITableViewCell *cell = [controller tableView:controller.tableView cellForRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]];
+    UIListContentConfiguration *content = (UIListContentConfiguration *)cell.contentConfiguration;
+    check(content.textProperties.font.pointSize < 17, @"actual-list-respects-smaller-user-text-size");
+    [window.traitOverrides removeTrait:UITraitPreferredContentSizeCategory.class];
+    [window layoutIfNeeded];
+    [controller.tableView reloadData];
+}
+
 // Rescanning is supplied by fixtures. The real batch mutation implementation runs.
 @interface CHFixtureCaches : WQCacheCleanerViewController
 @end
@@ -224,60 +225,41 @@ static void runAppListStateFixtures(UIWindow *window)
     window.rootViewController = [[UINavigationController alloc] initWithRootViewController:controller];
     [window makeKeyAndVisible];
     [controller loadViewIfNeeded];
+    check([[visibleLabelText(controller.tableView.backgroundView) stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet] isEqualToString:@"Refresh to update"], @"initial-apps-explicit-refresh-message");
+    check(![WQScanTask taskNamed:@"apps"].running, @"opening-apps-does-not-start-a-scan");
     WQScanTask *task = [WQScanTask taskNamed:@"apps"];
     NSUInteger generation = [task beginFresh:YES cancel:^{}];
-    check([controller tableView:controller.tableView numberOfRowsInSection:0] == 0, @"first-app-scan-has-no-phantom-row");
-    [controller.tableView reloadData];
-    [controller.tableView layoutIfNeeded];
-    [task finish:@{@"rows": @[], @"complete": @YES} generation:generation];
-    check([controller tableView:controller.tableView numberOfRowsInSection:0] == 0, @"empty-completed-app-scan-is-safe");
+    [task progress:@"Finding apps…" fraction:0.25 generation:generation];
+    check([controller.tableView numberOfRowsInSection:0] == 0, @"first-app-scan-has-no-phantom-row");
+    check([visibleLabelText(controller.tableView.backgroundView) containsString:@"Finding apps"], @"initial-loading-is-distinct-from-empty");
+    [task finish:@{@"rows":@[], @"complete":@YES} generation:generation];
+    check([controller.tableView numberOfRowsInSection:0] == 0 && [visibleLabelText(controller.tableView.backgroundView) containsString:@"No accessible apps"], @"genuine-empty-app-list-is-distinct");
     generation = [task beginFresh:YES cancel:^{}];
-    check([controller tableView:controller.tableView numberOfRowsInSection:0] == 0, @"empty-app-refresh-has-no-phantom-row");
-    NSDictionary *row = @{@"name": @"Read-only Fixture", @"bundleID": @"com.example.fixture", @"bytes": @123,
-                          @"hasAccess": @YES, @"hasIdentity": @YES, @"sizeKnown": @YES};
-    [task finish:@{@"rows": @[row], @"note": @"", @"complete": @YES} generation:generation];
-    check([controller tableView:controller.tableView numberOfRowsInSection:0] == 1, @"completed-app-model-is-visible");
-    check([[controller tableView:controller.tableView titleForHeaderInSection:0] containsString:@"1 app ·"], @"single-app-summary-uses-singular");
+    check([controller.tableView numberOfRowsInSection:0] == 0, @"empty-app-refresh-has-no-phantom-row");
+    NSDictionary *row = @{@"name":@"Read-only Fixture", @"bundleID":@"com.example.fixture.with.a.long.identifier", @"bytes":@123,
+        @"hasAccess":@YES, @"hasIdentity":@YES, @"sizeKnown":@YES};
+    [task finish:@{@"rows":@[row], @"note":@"", @"complete":@YES} generation:generation];
+    check([controller.tableView numberOfRowsInSection:0] == 1 && !controller.tableView.backgroundView, @"completed-app-model-is-visible-without-empty-banner");
     generation = [task beginFresh:YES cancel:^{}];
-    NSMutableDictionary *partial = [row mutableCopy];
-    partial[@"sizeKnown"] = @NO;
-    [task finish:@{@"rows": @[partial], @"note": @"", @"complete": @YES} generation:generation];
-    check([[controller tableView:controller.tableView titleForHeaderInSection:0] containsString:@"size incomplete"], @"partial-app-total-does-not-claim-an-exact-size");
-    generation = [task beginFresh:YES cancel:^{}];
-    check([controller tableView:controller.tableView numberOfRowsInSection:0] == 1, @"refresh-keeps-real-app-row");
+    NSMutableDictionary *partial = [row mutableCopy]; partial[@"sizeKnown"] = @NO;
+    [task finish:@{@"rows":@[partial], @"note":@"", @"complete":@YES} generation:generation];
     UITableViewCell *cell = [controller tableView:controller.tableView cellForRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]];
     UIListContentConfiguration *content = (UIListContentConfiguration *)cell.contentConfiguration;
-    check([content.text isEqualToString:@"Read-only Fixture"], @"refresh-row-renders-existing-model");
-    check(content.secondaryTextProperties.numberOfLines ==
-          (UIContentSizeCategoryIsAccessibilityCategory(controller.traitCollection.preferredContentSizeCategory) ? 0 : 2),
-          @"app-identifiers-and-size-wrap-at-accessibility-sizes");
-    [window setNeedsLayout];
-    [window layoutIfNeeded];
-    [controller.tableView layoutIfNeeded];
-    UITableViewHeaderFooterView *footer = (UITableViewHeaderFooterView *)controller.tableView.tableFooterView;
-    content = (UIListContentConfiguration *)footer.contentConfiguration;
-    check(content.textProperties.numberOfLines == 0 && [content.text containsString:@"Safari and Messages"], @"apps-footer-wraps-the-complete-safety-guidance");
-    NSString *documents = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
-    NSDictionary *geometry = @{@"footer":NSStringFromCGRect(footer.frame),
-        @"row":NSStringFromCGRect([controller.tableView rectForRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]]),
-        @"table":NSStringFromCGRect(controller.tableView.frame), @"attached":@(footer.window != nil)};
-    [[NSJSONSerialization dataWithJSONObject:geometry options:NSJSONWritingPrettyPrinted error:nil]
-        writeToFile:[documents stringByAppendingPathComponent:@"footer-layout.log"] atomically:YES];
-    check(footer.window != nil, @"apps-guidance-is-tested-in-a-visible-window");
-    // UIKit's row-rect and footer-frame paths round fractional points
-    // differently (observed difference: 0.0000025 pt). This subpixel bound
-    // admits numerical noise while still refusing any visible overlap.
-    check(CGRectGetHeight(footer.frame) > 0 &&
-          CGRectGetMinY(footer.frame) + 0.001 >= CGRectGetMaxY([controller.tableView rectForRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]]),
-          @"apps-guidance-follows-rows-without-a-floating-section-footer");
-    [task finish:@{@"rows": @[], @"complete": @YES} generation:generation];
+    check([content.secondaryText containsString:@"size incomplete"] && [content.secondaryText containsString:row[@"bundleID"]], @"partial-storage-is-labelled-on-the-row");
+    runTypographyFixtures(window, controller);
     generation = [task beginFresh:YES cancel:^{}];
-    NSString *error = @"App discovery failed or was cancelled. Pull to refresh to try again.";
-    [task finish:@{@"rows": @[], @"complete": @NO, @"note": error} generation:generation];
-    UITableViewHeaderFooterView *header = (UITableViewHeaderFooterView *)[controller tableView:controller.tableView viewForHeaderInSection:0];
-    content = (UIListContentConfiguration *)header.contentConfiguration;
-    check(content.textProperties.numberOfLines == 0 && [content.text isEqualToString:error], @"app-error-header-wraps-the-complete-retry-instruction");
+    check([controller.tableView numberOfRowsInSection:0] == 1, @"refresh-keeps-real-app-row");
+    [task finish:@{@"rows":@[], @"complete":@YES} generation:generation];
+    generation = [task beginFresh:YES cancel:^{}];
+    NSString *error = @"App discovery failed. Refresh to retry.";
+    [task finish:@{@"rows":@[], @"complete":@NO, @"note":error} generation:generation];
+    check([visibleLabelText(controller.tableView.backgroundView) containsString:error], @"discovery-failure-is-visible-and-distinct-from-empty");
+    [task setValue:@YES forKey:@"persistenceFailed"];
+    [NSNotificationCenter.defaultCenter postNotificationName:WQScanTaskChangedNotification object:task];
+    check([visibleLabelText(controller.tableView.backgroundView) containsString:@"Could not save"], @"checkpoint-failure-remains-visible-without-a-scan-date-banner");
+    [task setValue:@NO forKey:@"persistenceFailed"];
 }
+
 static WQCacheItem *cacheFixture(NSString *root)
 {
     NSFileManager *files = NSFileManager.defaultManager;
@@ -457,7 +439,6 @@ static void holdFixturePurge(void)
 static void releaseFixturePurge(void)
 {
     dispatch_semaphore_signal(CHOperationRelease);
-    wq_test_tree_hook = nil;
 }
 static void runRealAppClearFixtures(UIWindow *window, dispatch_block_t next)
 {
@@ -513,6 +494,7 @@ static void runRealAppClearFixtures(UIWindow *window, dispatch_block_t next)
                                 [apps dismissViewControllerAnimated:NO completion:^{
                                     awaitUIKitState(^BOOL { return [apps.presentedViewController.title isEqualToString:@"Data cleared"] && !apps.presentedViewController.isBeingPresented; },
                                         150, @"real-clear-outcome-delivered-once", diagnostics, ^{
+                                        wq_test_tree_hook = nil;
                                         for (NSString *part in @[@"Documents", @"Library", @"tmp"]) {
                                             NSArray *left = [files contentsOfDirectoryAtPath:[owned.containerPath stringByAppendingPathComponent:part] error:nil];
                                             check(left != nil && left.count == 0, @"real-app-clear-retains-empty-part-roots");
@@ -564,6 +546,7 @@ static void runCacheStopFixture(UIWindow *window, dispatch_block_t next)
         [controller stopClean];
         releaseFixturePurge();
         waitForBatch(controller, 200, ^{
+            wq_test_tree_hook = nil;
             NSString *result = [controller valueForKey:@"result"];
             check([result hasPrefix:@"Stopped."] && ![result containsString:@"access denied or data changed"], @"user-stop-is-distinct-from-access-failure");
             check([NSFileManager.defaultManager fileExistsAtPath:[second.targets[0] stringByAppendingPathComponent:@"sentinel"]], @"stop-preserves-later-batch-items");
@@ -648,6 +631,7 @@ static void runRecoveryConsentFixtures(UIWindow *window, dispatch_block_t next)
         generation = [apps beginFresh:YES cancel:^{}];
         [apps finish:@{@"rows": @[row], @"complete": @YES} generation:generation];
         self.window = [[UIWindow alloc] initWithWindowScene:(UIWindowScene *)scene];
+    wq_configure_window(self.window);
         self.window.rootViewController = [NSClassFromString(@"CHTabs") new];
         [self.window makeKeyAndVisible];
         dispatch_async(dispatch_get_main_queue(), ^{
@@ -661,6 +645,7 @@ static void runRecoveryConsentFixtures(UIWindow *window, dispatch_block_t next)
         return;
     }
     self.window = [[UIWindow alloc] initWithWindowScene:(UIWindowScene *)scene];
+    wq_configure_window(self.window);
     UIImage *neutralBook = wq_app_icon(@"com.example.uninstalled.facebook");
     UIImage *neutralMusic = wq_app_icon(@"com.example.uninstalled.music");
     check(neutralBook != nil && [UIImagePNGRepresentation(neutralBook) isEqual:UIImagePNGRepresentation(neutralMusic)], @"third-party-fallback-icons-do-not-guess-apple-services");
@@ -679,6 +664,12 @@ static void runRecoveryConsentFixtures(UIWindow *window, dispatch_block_t next)
     self.window.rootViewController = tabs;
     [self.window makeKeyAndVisible];
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+        NSString *appearance = NSProcessInfo.processInfo.environment[@"CH_EXPECTED_APPEARANCE"];
+        UIUserInterfaceStyle expected = [appearance isEqualToString:@"dark"] ? UIUserInterfaceStyleDark : UIUserInterfaceStyleLight;
+        check(self.window.traitCollection.userInterfaceStyle == expected, @"real-simulator-system-appearance-is-applied");
+        CGRect bar = [tabs.tabBar convertRect:tabs.tabBar.bounds toView:self.window];
+        check(!tabs.tabBar.hidden && CGRectGetMinY(bar) > self.window.bounds.size.height / 2 &&
+              fabs(CGRectGetMaxY(bar) - self.window.bounds.size.height) < 2, @"native-tabs-and-search-are-at-the-bottom-on-iphone-and-ipad");
         check(tabs.tabs.count == 3 && [tabs.tabs[2] isKindOfClass:UISearchTab.class], @"two-content-tabs-and-native-search");
         UINavigationController *appsNav = (UINavigationController *)tabs.selectedViewController;
         WQAppsViewController *apps = (WQAppsViewController *)appsNav.topViewController;
@@ -691,39 +682,36 @@ static void runRecoveryConsentFixtures(UIWindow *window, dispatch_block_t next)
         [caches loadViewIfNeeded];
         check([caches.tableView numberOfRowsInSection:1] == 1, @"apps-query-does-not-filter-caches");
         NSArray *items = [caches valueForKey:@"items"];
-        WQSummaryCell *summary = (WQSummaryCell *)[caches tableView:caches.tableView cellForRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]];
-        check([summary.statusLabel.text containsString:@"selected"], @"empty-completed-cache-note-keeps-selection-summary-visible");
+        check([caches valueForKey:@"status"] == nil, @"empty-completed-cache-note-is-normalized");
         [caches setValue:@"Freed fixture data." forKey:@"result"];
-        summary = (WQSummaryCell *)[caches tableView:caches.tableView cellForRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]];
-        check([summary.statusLabel.text isEqualToString:@"Freed fixture data."], @"empty-completed-cache-note-keeps-clean-result-visible");
+        [caches updatePresentation];
+        check([[caches statusText] isEqualToString:@"Freed fixture data."], @"normal-empty-note-does-not-hide-clean-outcome");
         [caches setValue:nil forKey:@"result"];
         id item = items.firstObject;
         NSNumber *cacheKnown = [item valueForKey:@"cacheKnown"];
         [item setValue:@NO forKey:@"cacheKnown"];
-        summary = (WQSummaryCell *)[caches tableView:caches.tableView cellForRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]];
-        check([summary.captionLabel.text containsString:@"incomplete"], @"partial-cache-total-is-labelled-incomplete");
+        UITableViewCell *partialCell = [caches tableView:caches.tableView cellForRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]];
+        UIListContentConfiguration *partialContent = (UIListContentConfiguration *)partialCell.contentConfiguration;
+        check([partialContent.secondaryText containsString:@"incomplete"], @"partial-cache-size-is-labelled-incomplete");
         [item setValue:cacheKnown forKey:@"cacheKnown"];
         [item setValue:@NO forKey:@"limited"];
-        NSIndexPath *cacheRow = [NSIndexPath indexPathForRow:0 inSection:1];
-        WQCleanerCell *cacheCell = (WQCleanerCell *)[caches tableView:caches.tableView cellForRowAtIndexPath:cacheRow];
+        NSIndexPath *cacheRow = [NSIndexPath indexPathForRow:0 inSection:0];
+        UITableViewCell *cacheCell = [caches tableView:caches.tableView cellForRowAtIndexPath:cacheRow];
         check(cacheCell.isAccessibilityElement && [cacheCell.accessibilityValue isEqualToString:@"Not selected"], @"cache-row-exposes-unselected-state");
         check([cacheCell.accessibilityLabel containsString:@"Disposable Fixture"] && (cacheCell.accessibilityTraits & UIAccessibilityTraitButton), @"cache-row-groups-name-and-action");
-        check(cacheCell.nameLabel.adjustsFontForContentSizeCategory && cacheCell.detailLabel.adjustsFontForContentSizeCategory && cacheCell.sizeLabel.adjustsFontForContentSizeCategory, @"cache-labels-follow-dynamic-type");
+        runTypographyFixtures(self.window, caches);
         [caches tableView:caches.tableView didSelectRowAtIndexPath:cacheRow];
         check([[item valueForKey:@"selected"] boolValue], @"manual-cache-selection");
         [caches.tableView layoutIfNeeded];
-        check([renderedFooterText(caches.tableView, 1) containsString:@"Clears each selected app"], @"rendered-cache-footer-updates-after-selection");
-        cacheCell = (WQCleanerCell *)[caches tableView:caches.tableView cellForRowAtIndexPath:cacheRow];
+        cacheCell = [caches tableView:caches.tableView cellForRowAtIndexPath:cacheRow];
         check([cacheCell.accessibilityValue isEqualToString:@"Selected"] && (cacheCell.accessibilityTraits & UIAccessibilityTraitSelected), @"cache-row-exposes-selected-state");
         [caches tableView:caches.tableView didSelectRowAtIndexPath:cacheRow];
         check(![[item valueForKey:@"selected"] boolValue], @"manual-cache-deselection");
         [caches.tableView layoutIfNeeded];
-        check([renderedFooterText(caches.tableView, 1) containsString:@"Select app caches"], @"rendered-cache-footer-updates-after-deselection");
-        runAccessibleCacheLayoutFixture();
-        cacheCell = (WQCleanerCell *)[caches tableView:caches.tableView cellForRowAtIndexPath:cacheRow];
+        cacheCell = [caches tableView:caches.tableView cellForRowAtIndexPath:cacheRow];
         check([cacheCell.accessibilityValue isEqualToString:@"Not selected"] && !(cacheCell.accessibilityTraits & UIAccessibilityTraitSelected), @"cache-row-clears-selected-accessibility-state");
         [item setValue:@YES forKey:@"limited"];
-        cacheCell = (WQCleanerCell *)[caches tableView:caches.tableView cellForRowAtIndexPath:cacheRow];
+        cacheCell = [caches tableView:caches.tableView cellForRowAtIndexPath:cacheRow];
         check([cacheCell.accessibilityValue isEqualToString:@"Access limited"], @"limited-cache-row-exposes-refusal-state");
         check(![[items.firstObject valueForKey:@"selected"] boolValue], @"cache-fixture-not-preselected");
         WQScanTask *task = [WQScanTask taskNamed:@"clean"];

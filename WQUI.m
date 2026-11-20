@@ -2,6 +2,70 @@
 #import "WQAccess.h"
 #import "WQScanTask.h"
 #import <fcntl.h>
+
+void wq_configure_window(UIWindow *window)
+{
+    window.maximumContentSizeCategory = UIContentSizeCategoryLarge;
+}
+
+UIFont *wq_font(UIFontTextStyle style, UITraitCollection *traits)
+{
+    UIContentSizeCategory category = traits.preferredContentSizeCategory ?: UIContentSizeCategoryLarge;
+    if (UIContentSizeCategoryCompareToCategory(category, UIContentSizeCategoryLarge) == NSOrderedDescending)
+        category = UIContentSizeCategoryLarge;
+    return [UIFont preferredFontForTextStyle:style compatibleWithTraitCollection:
+        [UITraitCollection traitCollectionWithPreferredContentSizeCategory:category]];
+}
+
+void wq_prepare_list(UITableViewController *host, NSString *title)
+{
+    host.title = title;
+    host.view.maximumContentSizeCategory = UIContentSizeCategoryLarge;
+    host.navigationItem.largeTitleDisplayMode = UINavigationItemLargeTitleDisplayModeNever;
+    host.navigationItem.title = @"";
+    UILabel *label = [UILabel new];
+    label.text = title;
+    label.font = wq_font(UIFontTextStyleHeadline, host.traitCollection);
+    label.adjustsFontForContentSizeCategory = YES;
+    label.accessibilityTraits |= UIAccessibilityTraitHeader;
+    host.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc] initWithCustomView:label];
+    host.tableView.rowHeight = UITableViewAutomaticDimension;
+    host.tableView.estimatedRowHeight = 84;
+    host.tableView.sectionHeaderHeight = UITableViewAutomaticDimension;
+    host.tableView.estimatedSectionHeaderHeight = 44;
+    host.tableView.sectionFooterHeight = 0;
+    host.tableView.estimatedSectionFooterHeight = 0;
+}
+
+void wq_empty_message(UITableView *table, NSString *message)
+{
+    if (!message.length) { table.backgroundView = nil; return; }
+    UIView *background = [UIView new];
+    UILabel *label = [UILabel new];
+    label.text = message;
+    label.numberOfLines = 0;
+    label.textAlignment = NSTextAlignmentCenter;
+    label.textColor = UIColor.secondaryLabelColor;
+    label.font = wq_font(UIFontTextStyleBody, table.traitCollection);
+    label.adjustsFontForContentSizeCategory = YES;
+    label.translatesAutoresizingMaskIntoConstraints = NO;
+    [background addSubview:label];
+    [NSLayoutConstraint activateConstraints:@[
+        [label.leadingAnchor constraintEqualToAnchor:background.leadingAnchor constant:24],
+        [label.trailingAnchor constraintEqualToAnchor:background.trailingAnchor constant:-24],
+        [label.centerYAnchor constraintEqualToAnchor:background.centerYAnchor],
+    ]];
+    table.backgroundView = background;
+}
+
+UIBarButtonItem *wq_refresh_button(id target, SEL action, BOOL enabled)
+{
+    UIBarButtonItem *button = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemRefresh target:target action:action];
+    button.accessibilityLabel = @"Refresh";
+    button.accessibilityIdentifier = @"refresh";
+    button.enabled = enabled;
+    return button;
+}
 // Private: app icon by bundle id (in UIKit; guarded with respondsToSelector).
 @interface UIImage (WQPrivate)
 + (UIImage *)_applicationIconImageForBundleIdentifier:(NSString *)bid format:(int)fmt scale:(CGFloat)scale;
@@ -313,10 +377,18 @@ void wq_alert(UIViewController *host, NSString *title, NSString *message)
     if (scene && scene.activationState != UISceneActivationStateForegroundActive) return;
     UINavigationController *nav = host.navigationController;
     if (nav && nav.topViewController != host) return;
-    if (host.presentedViewController && !host.presentedViewController.isBeingDismissed) return;
     UIAlertController *alert = wq_alert_controller(title, message, UIAlertControllerStyleAlert);
     [alert addAction:wq_alert_action(@"OK", UIAlertActionStyleDefault, nil)];
-    [host presentViewController:alert animated:YES completion:nil];
+    wq_present_confirmation(host, alert);
+}
+
+void wq_present_confirmation(UIViewController *host, UIAlertController *alert)
+{
+    UITabBarController *tabs = host.tabBarController;
+    if ([tabs conformsToProtocol:@protocol(CHContextAlertPresentation)] &&
+        [(id<CHContextAlertPresentation>)tabs presentContextAlert:alert from:host]) return;
+    if (!host.presentedViewController && host.view.window)
+        [host presentViewController:alert animated:YES completion:nil];
 }
 
 NSString *wq_size_text(unsigned long long size)
@@ -334,7 +406,7 @@ NSString *wq_size_text(unsigned long long size)
 {
     if ((self = [super initWithReuseIdentifier:reuseIdentifier])) {
         _label = [UILabel new];
-        _label.font = [UIFont preferredFontForTextStyle:UIFontTextStyleFootnote];
+        _label.font = wq_font(UIFontTextStyleFootnote, self.traitCollection);
         _label.adjustsFontForContentSizeCategory = YES;
         _label.textColor = UIColor.secondaryLabelColor;
         _label.numberOfLines = 0;
@@ -369,13 +441,13 @@ NSString *wq_size_text(unsigned long long size)
 void wq_offer_access_recovery(UIViewController *host)
 {
     if (!wq_access_cache_needs_recovery() || host.presentedViewController || !host.view.window) return;
-    UIAlertController *alert = wq_alert_controller(@"Access cache needs recovery", @"An interrupted App Group cache swap is preventing access. Reset preserves existing cache contents. Pull to refresh after recovery.", UIAlertControllerStyleAlert);
+    UIAlertController *alert = wq_alert_controller(@"Access cache needs recovery", @"Reset the interrupted App Group cache swap. Existing cache contents are preserved.", UIAlertControllerStyleAlert);
     [alert addAction:wq_alert_action(@"Cancel", UIAlertActionStyleCancel, nil)];
     [alert addAction:wq_alert_action(@"Reset Access Cache", UIAlertActionStyleDefault, ^(UIAlertAction *__unused action) {
         dispatch_async(wq_io(), ^{
             NSString *error = nil;
             BOOL ok = wq_reset_access_cache(&error);
-            dispatch_async(dispatch_get_main_queue(), ^{ wq_alert(host, ok ? @"Access cache recovered" : @"Recovery incomplete", error ?: @"Pull to refresh to retry access."); });
+            dispatch_async(dispatch_get_main_queue(), ^{ wq_alert(host, ok ? @"Access cache recovered" : @"Recovery incomplete", error ?: @"Refresh to retry access."); });
         });
     })];
     [host presentViewController:alert animated:YES completion:nil];

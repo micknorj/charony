@@ -8,7 +8,6 @@ extern NSString *const WQScanTaskChangedNotification;
 @property (nonatomic, readonly) NSString *name;
 @property (nonatomic, readonly) NSString *identifier;
 @property (nonatomic, readonly, nullable) NSDictionary *result;
-@property (nonatomic, readonly, nullable) NSDate *finishedAt;
 @property (nonatomic, readonly) BOOL running;
 @property (nonatomic, readonly) BOOL paused;
 + (void)setPaused:(BOOL)paused;

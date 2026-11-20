@@ -23,7 +23,7 @@ class CIPreflightTests(unittest.TestCase):
             self.responses[('xcrun', '--sdk', sdk, '--show-sdk-path')] = f'/SDKs/{sdk}.sdk'
         self.runtimes = [{'identifier': 'com.apple.CoreSimulator.SimRuntime.iOS-26-2',
                           'version': '26.2', 'isAvailable': True}]
-        self.devices = [{'identifier': CI.DEVICE_TYPE}]
+        self.devices = [{'identifier': CI.DEVICE_TYPE}, {'identifier': CI.IPAD_DEVICE_TYPE}]
 
     def run_command(self, command):
         if command == ['xcrun', 'simctl', 'list', 'runtimes', '--json']:
@@ -36,6 +36,7 @@ class CIPreflightTests(unittest.TestCase):
         report = CI.inspect_toolchain(self.run_command, '26.0', simulator=True)
         self.assertEqual(report['simulator_runtime'], self.runtimes[0]['identifier'])
         self.assertEqual(report['simulator_device_type'], CI.DEVICE_TYPE)
+        self.assertEqual(report['simulator_ipad_device_type'], CI.IPAD_DEVICE_TYPE)
         self.assertEqual(set(report['sdks']), {'macosx', 'iphoneos', 'iphonesimulator'})
 
     def test_wrong_xcode_is_refused(self):
@@ -65,6 +66,11 @@ class CIPreflightTests(unittest.TestCase):
 
     def test_missing_device_type_is_refused(self):
         self.devices = []
+        with self.assertRaises(ValueError):
+            CI.inspect_toolchain(self.run_command, '26.0', simulator=True)
+
+    def test_missing_supported_ipad_fixture_device_is_refused(self):
+        self.devices = [{'identifier': CI.DEVICE_TYPE}]
         with self.assertRaises(ValueError):
             CI.inspect_toolchain(self.run_command, '26.0', simulator=True)
 
