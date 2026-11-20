@@ -558,11 +558,24 @@ static void runCacheBatchFixtures(UIWindow *window, dispatch_block_t next)
                 [stale loadViewIfNeeded];
                 WQCacheItem *stillSafe = cacheFixture(root);
                 [stale setValue:@[stillSafe] forKey:@"items"];
-                [stale cleanItems:@[stillSafe] generation:[[stale valueForKey:@"scanGeneration"] unsignedIntegerValue] + 1];
-                check(![[stale valueForKey:@"cleaning"] boolValue], @"stale-confirmation-does-not-start-worker");
-                check([NSFileManager.defaultManager fileExistsAtPath:[stillSafe.targets[0] stringByAppendingPathComponent:@"sentinel"]], @"stale-confirmation-preserves-data");
-                [NSFileManager.defaultManager removeItemAtPath:root error:nil];
-                next();
+                awaitFixtureVisible(stale, ^{
+                    [stale cleanItems:@[stillSafe] generation:[[stale valueForKey:@"scanGeneration"] unsignedIntegerValue] + 1];
+                    check(![[stale valueForKey:@"cleaning"] boolValue], @"stale-confirmation-does-not-start-worker");
+                    check([NSFileManager.defaultManager fileExistsAtPath:[stillSafe.targets[0] stringByAppendingPathComponent:@"sentinel"]], @"stale-confirmation-preserves-data");
+                    NSDictionary *(^staleDiagnostics)(void) = ^NSDictionary *{
+                        return @{@"alert":stale.presentedViewController.title ?: @"nil"};
+                    };
+                    // The refusal presents a real error. Replacing its host
+                    // mid-presentation caused unbalanced appearance warnings.
+                    awaitUIKitState(^BOOL { return [stale.presentedViewController.title isEqualToString:@"Selection changed"] && !stale.presentedViewController.isBeingPresented; },
+                        150, @"stale-selection-error-is-visible-before-fixture-handoff", staleDiagnostics, ^{
+                        [stale dismissViewControllerAnimated:NO completion:^{
+                            check(!stale.presentedViewController && ![[stale valueForKey:@"cleaning"] boolValue], @"stale-selection-error-dismisses-without-mutation");
+                            [NSFileManager.defaultManager removeItemAtPath:root error:nil];
+                            next();
+                        }];
+                    });
+                });
             });
         });
     };
