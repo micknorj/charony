@@ -182,8 +182,11 @@ static void runAppListStateFixtures(UIWindow *window)
     [[NSJSONSerialization dataWithJSONObject:geometry options:NSJSONWritingPrettyPrinted error:nil]
         writeToFile:[documents stringByAppendingPathComponent:@"footer-layout.log"] atomically:YES];
     check(footer.window != nil, @"apps-guidance-is-tested-in-a-visible-window");
+    // UIKit's row-rect and footer-frame paths round fractional points
+    // differently (observed difference: 0.0000025 pt). This subpixel bound
+    // admits numerical noise while still refusing any visible overlap.
     check(CGRectGetHeight(footer.frame) > 0 &&
-          CGRectGetMinY(footer.frame) >= CGRectGetMaxY([controller.tableView rectForRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]]),
+          CGRectGetMinY(footer.frame) + 0.001 >= CGRectGetMaxY([controller.tableView rectForRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]]),
           @"apps-guidance-follows-rows-without-a-floating-section-footer");
     [task finish:@{@"rows": @[], @"complete": @YES} generation:generation];
     generation = [task beginFresh:YES cancel:^{}];
