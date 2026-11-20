@@ -283,11 +283,13 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
     return YES;
 }
 
-// Row: selection circle, icon, name with "cache · temp" below, size in a
-// fixed right-hand column so long names never push it out.
+// Keep a compact size column at standard sizes. Accessibility sizes put the
+// size below wrapping text so the app name and cleanup scope remain readable.
 @interface WQCleanerCell : UITableViewCell
 @property (nonatomic, strong) UIImageView *checkView, *iconView;
 @property (nonatomic, strong) UILabel *nameLabel, *detailLabel, *sizeLabel;
+@property (nonatomic) BOOL accessibilityLayout;
+@property (nonatomic, strong) NSArray<NSLayoutConstraint *> *compactConstraints, *accessibleConstraints;
 @end
 
 @implementation WQCleanerCell
@@ -334,19 +336,45 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
             [_iconView.centerYAnchor constraintEqualToAnchor:self.contentView.centerYAnchor],
             [_iconView.widthAnchor constraintEqualToConstant:36],
             [_iconView.heightAnchor constraintEqualToConstant:36],
+            [_nameLabel.leadingAnchor constraintEqualToAnchor:_iconView.trailingAnchor constant:12],
+            [_nameLabel.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:11],
+            [_detailLabel.leadingAnchor constraintEqualToAnchor:_nameLabel.leadingAnchor],
+            [_detailLabel.topAnchor constraintEqualToAnchor:_nameLabel.bottomAnchor constant:2],
+        ]];
+        _compactConstraints = @[
             [_sizeLabel.trailingAnchor constraintEqualToAnchor:m.trailingAnchor],
             [_sizeLabel.centerYAnchor constraintEqualToAnchor:self.contentView.centerYAnchor],
             [_sizeLabel.widthAnchor constraintGreaterThanOrEqualToConstant:76],
-            [_nameLabel.leadingAnchor constraintEqualToAnchor:_iconView.trailingAnchor constant:12],
             [_nameLabel.trailingAnchor constraintLessThanOrEqualToAnchor:_sizeLabel.leadingAnchor constant:-8],
-            [_nameLabel.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:11],
-            [_detailLabel.leadingAnchor constraintEqualToAnchor:_nameLabel.leadingAnchor],
             [_detailLabel.trailingAnchor constraintLessThanOrEqualToAnchor:_sizeLabel.leadingAnchor constant:-8],
-            [_detailLabel.topAnchor constraintEqualToAnchor:_nameLabel.bottomAnchor constant:2],
             [_detailLabel.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor constant:-11],
-        ]];
+        ];
+        _accessibleConstraints = @[
+            [_nameLabel.trailingAnchor constraintEqualToAnchor:m.trailingAnchor],
+            [_detailLabel.trailingAnchor constraintEqualToAnchor:m.trailingAnchor],
+            [_sizeLabel.leadingAnchor constraintEqualToAnchor:_nameLabel.leadingAnchor],
+            [_sizeLabel.trailingAnchor constraintLessThanOrEqualToAnchor:m.trailingAnchor],
+            [_sizeLabel.topAnchor constraintEqualToAnchor:_detailLabel.bottomAnchor constant:6],
+            [_sizeLabel.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor constant:-11],
+        ];
+        [NSLayoutConstraint activateConstraints:_compactConstraints];
     }
     return self;
+}
+
+- (void)setAccessibilityLayout:(BOOL)accessibilityLayout
+{
+    if (_accessibilityLayout == accessibilityLayout) return;
+    _accessibilityLayout = accessibilityLayout;
+    [NSLayoutConstraint deactivateConstraints:accessibilityLayout ? _compactConstraints : _accessibleConstraints];
+    [NSLayoutConstraint activateConstraints:accessibilityLayout ? _accessibleConstraints : _compactConstraints];
+    for (UILabel *label in @[_nameLabel, _detailLabel]) {
+        label.numberOfLines = accessibilityLayout ? 0 : 1;
+        label.lineBreakMode = accessibilityLayout ? NSLineBreakByWordWrapping : NSLineBreakByTruncatingMiddle;
+    }
+    _sizeLabel.textAlignment = accessibilityLayout ? NSTextAlignmentNatural :
+        ([UIView userInterfaceLayoutDirectionForSemanticContentAttribute:self.semanticContentAttribute]
+            == UIUserInterfaceLayoutDirectionRightToLeft ? NSTextAlignmentLeft : NSTextAlignmentRight);
 }
 
 @end
@@ -509,11 +537,17 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
     [self.refreshControl addTarget:self action:@selector(userRefresh) forControlEvents:UIControlEventValueChanged];
     _scanTask = [WQScanTask taskNamed:@"clean"];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(scanTaskChanged:) name:WQScanTaskChangedNotification object:_scanTask];
+    [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(contentSizeChanged:) name:UIContentSizeCategoryDidChangeNotification object:nil];
     [self scanTaskChanged:nil];
     if (!_scanTask.running && !_scanTask.userPaused && (!_scanTask.result || _scanTask.interrupted)) {
         _resumeScan = _scanTask.interrupted;
         [self scan];
     }
+}
+
+- (void)contentSizeChanged:(NSNotification *)notification
+{
+    [self.tableView reloadData];
 }
 
 - (void)viewWillAppear:(BOOL)animated
@@ -903,7 +937,7 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
     for (WQCacheItem *item in _items) if (!item.crashLogs) appCount++;
     if (!appCount) return WQLocalized(@"Crash Logs");
     return _query.length ? WQLocalizedFormat(@"%lu of %lu", (unsigned long)shown, (unsigned long)_items.count)
-                         : WQLocalizedFormat(@"%lu apps and extensions", (unsigned long)appCount);
+                         : WQLocalizedFormat(appCount == 1 ? @"%lu app or extension" : @"%lu apps and extensions", (unsigned long)appCount);
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section
@@ -941,6 +975,7 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
     }
     WQCleanerCell *cell = [tableView dequeueReusableCellWithIdentifier:@"item"]
         ?: [[WQCleanerCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:@"item"];
+    cell.accessibilityLayout = UIContentSizeCategoryIsAccessibilityCategory(self.traitCollection.preferredContentSizeCategory);
     WQCacheItem *item = self.visibleItems[(NSUInteger)indexPath.row];
     cell.nameLabel.text = item.name;
     if (item.crashLogs) {
@@ -977,8 +1012,8 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
         return;
     }
     item.selected = !item.selected;
-    [tableView reloadRowsAtIndexPaths:@[indexPath, [NSIndexPath indexPathForRow:0 inSection:0]]
-                     withRowAnimation:UITableViewRowAnimationNone];
+    // The section footer describes the current selected scope too.
+    [tableView reloadData];
     [self updateButtons];
 }
 
@@ -1084,6 +1119,7 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
             wq_end_mutation();
             self->_cleaning = NO;
             self->_cleanCancellation = nil;
+            [self updateButtons];
             if (cancelled) {
                 self->_status = nil;
                 [self rescanAfterClean:YES];

@@ -131,7 +131,7 @@ def main():
     if not pads:missing.append({'state':'ipad','reason':'No iPad simulator device type was available'})
     metadata={'runtime_version':runtime['version'],'runtime_build':runtime['buildversion'],'capture_complete':False,'commit':run(['git','rev-parse','HEAD'],capture=True),'runtime':args.runtime,
               'workflow_url':f'https://github.com/{os.environ.get("GITHUB_REPOSITORY","micknorj/charony")}/actions/runs/{os.environ.get("GITHUB_RUN_ID","local")}',
-              'keyboard_setup':'One-time OS slide-to-type introduction marked as already seen on these disposable simulators','capture_method':'xcrun simctl io screenshot','fixture_host':True,'devices':[]}
+              'keyboard_setup':'Attempted to mark the OS slide-to-type introduction as seen; the OS may still display its first-use overlay. Inspect the actual frames.','capture_method':'xcrun simctl io screenshot','fixture_host':True,'devices':[]}
     try:
         run(['defaults','write','com.apple.iphonesimulator','ConnectHardwareKeyboard','-bool','NO'])
         for family,definition in devices:

@@ -15,6 +15,45 @@ static void check(BOOL condition, NSString *name)
 {
     if (!condition) { marker([@"FAIL-" stringByAppendingString:name]); abort(); }
 }
+static NSString *visibleLabelText(UIView *view)
+{
+    NSMutableArray<NSString *> *parts = [NSMutableArray new];
+    if ([view isKindOfClass:UILabel.class] && ((UILabel *)view).text.length)
+        [parts addObject:((UILabel *)view).text];
+    for (UIView *child in view.subviews) [parts addObject:visibleLabelText(child)];
+    return [parts componentsJoinedByString:@" "];
+}
+static void runAccessibleCacheLayoutFixture(void)
+{
+    WQCleanerCell *cell = [[WQCleanerCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:nil];
+    cell.accessibilityLayout = YES;
+    cell.nameLabel.text = @"Example Maps (disposable fixture)";
+    cell.detailLabel.text = @"cache 131 KB · temp 131 KB · access limited";
+    cell.sizeLabel.text = @"262 KB";
+    cell.nameLabel.font = [UIFont systemFontOfSize:53];
+    cell.detailLabel.font = [UIFont systemFontOfSize:43];
+    cell.sizeLabel.font = [UIFont systemFontOfSize:40];
+    cell.frame = CGRectMake(0, 0, 375, 1000);
+    [cell layoutIfNeeded];
+    CGSize size = [cell.contentView systemLayoutSizeFittingSize:CGSizeMake(375, 0)
+        withHorizontalFittingPriority:UILayoutPriorityRequired verticalFittingPriority:UILayoutPriorityFittingSizeLevel];
+    cell.frame = CGRectMake(0, 0, 375, ceil(size.height));
+    [cell setNeedsLayout];
+    [cell layoutIfNeeded];
+    for (UILabel *label in @[cell.nameLabel, cell.detailLabel]) {
+        CGSize text = [label sizeThatFits:CGSizeMake(CGRectGetWidth(label.bounds), CGFLOAT_MAX)];
+        check(label.numberOfLines == 0 && CGRectGetHeight(label.bounds) + 1 >= text.height,
+              @"accessible-cache-name-and-scope-fit-without-truncation");
+    }
+    check(CGRectGetMinY(cell.detailLabel.frame) >= CGRectGetMaxY(cell.nameLabel.frame) &&
+          CGRectGetMinY(cell.sizeLabel.frame) >= CGRectGetMaxY(cell.detailLabel.frame),
+          @"accessible-cache-labels-stack-without-overlap");
+    check(CGRectGetMaxX(cell.sizeLabel.frame) <= 375 && CGRectGetWidth(cell.sizeLabel.frame) > 0,
+          @"accessible-cache-size-remains-visible");
+    cell.accessibilityLayout = NO;
+    check(cell.nameLabel.numberOfLines == 1 && cell.detailLabel.numberOfLines == 1,
+          @"reused-cache-cell-restores-compact-layout");
+}
 // Rescanning is supplied by fixtures. The real batch mutation implementation runs.
 @interface CHFixtureCaches : WQCacheCleanerViewController
 @end
@@ -128,9 +167,15 @@ static void runAppListStateFixtures(void)
     UITableViewCell *cell = [controller tableView:controller.tableView cellForRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]];
     UIListContentConfiguration *content = (UIListContentConfiguration *)cell.contentConfiguration;
     check([content.text isEqualToString:@"Read-only Fixture"], @"refresh-row-renders-existing-model");
-    UITableViewHeaderFooterView *footer = (UITableViewHeaderFooterView *)[controller tableView:controller.tableView viewForFooterInSection:0];
+    controller.view.frame = CGRectMake(0, 0, 375, 812);
+    [controller.view setNeedsLayout];
+    [controller.view layoutIfNeeded];
+    UITableViewHeaderFooterView *footer = (UITableViewHeaderFooterView *)controller.tableView.tableFooterView;
     content = (UIListContentConfiguration *)footer.contentConfiguration;
     check(content.textProperties.numberOfLines == 0 && [content.text containsString:@"Safari and Messages"], @"apps-footer-wraps-the-complete-safety-guidance");
+    check(CGRectGetHeight(footer.frame) > 0 &&
+          CGRectGetMinY(footer.frame) >= CGRectGetMaxY([controller.tableView rectForRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]]),
+          @"apps-guidance-follows-rows-without-a-floating-section-footer");
     [task finish:@{@"rows": @[], @"complete": @YES} generation:generation];
     generation = [task beginFresh:YES cancel:^{}];
     NSString *error = @"App discovery failed or was cancelled. Pull to refresh to try again.";
@@ -253,6 +298,8 @@ static void runCacheBatchFixtures(UIWindow *window, dispatch_block_t next)
         [controller cleanItems:@[first, second] generation:[[controller valueForKey:@"scanGeneration"] unsignedIntegerValue]];
         waitForBatch(controller, 200, ^{
             check(![[controller valueForKey:@"cleaning"] boolValue], @"batch-finished");
+            for (UIBarButtonItem *button in controller.navigationItem.rightBarButtonItems)
+                check(![button.title isEqualToString:@"Stop"], @"completed-batch-removes-stop-before-rescan");
             for (WQCacheItem *item in @[first, second]) {
                 for (NSString *target in item.targets) {
                     NSArray *remaining = [NSFileManager.defaultManager contentsOfDirectoryAtPath:target error:nil];
@@ -370,10 +417,15 @@ static void runCacheBatchFixtures(UIWindow *window, dispatch_block_t next)
         check(cacheCell.nameLabel.adjustsFontForContentSizeCategory && cacheCell.detailLabel.adjustsFontForContentSizeCategory && cacheCell.sizeLabel.adjustsFontForContentSizeCategory, @"cache-labels-follow-dynamic-type");
         [caches tableView:caches.tableView didSelectRowAtIndexPath:cacheRow];
         check([[item valueForKey:@"selected"] boolValue], @"manual-cache-selection");
+        [caches.tableView layoutIfNeeded];
+        check([visibleLabelText([caches.tableView footerViewForSection:1]) containsString:@"Clears each selected app"], @"rendered-cache-footer-updates-after-selection");
         cacheCell = (WQCleanerCell *)[caches tableView:caches.tableView cellForRowAtIndexPath:cacheRow];
         check([cacheCell.accessibilityValue isEqualToString:@"Selected"] && (cacheCell.accessibilityTraits & UIAccessibilityTraitSelected), @"cache-row-exposes-selected-state");
         [caches tableView:caches.tableView didSelectRowAtIndexPath:cacheRow];
         check(![[item valueForKey:@"selected"] boolValue], @"manual-cache-deselection");
+        [caches.tableView layoutIfNeeded];
+        check([visibleLabelText([caches.tableView footerViewForSection:1]) containsString:@"Select app caches"], @"rendered-cache-footer-updates-after-deselection");
+        runAccessibleCacheLayoutFixture();
         cacheCell = (WQCleanerCell *)[caches tableView:caches.tableView cellForRowAtIndexPath:cacheRow];
         check([cacheCell.accessibilityValue isEqualToString:@"Not selected"] && !(cacheCell.accessibilityTraits & UIAccessibilityTraitSelected), @"cache-row-clears-selected-accessibility-state");
         [item setValue:@YES forKey:@"limited"];

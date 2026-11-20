@@ -224,8 +224,16 @@ static BOOL wq_dir_size_cancellable(NSString *dir, NSString *taskID, WQScanCance
     self.title = WQLocalizedNullable(@"Apps");
     self.tableView.sectionHeaderHeight = UITableViewAutomaticDimension;
     self.tableView.estimatedSectionHeaderHeight = 44;
-    self.tableView.sectionFooterHeight = UITableViewAutomaticDimension;
-    self.tableView.estimatedSectionFooterHeight = 64;
+    // A plain table's section footer floats over its rows. Keep the wrapping
+    // safety guidance after the list, including at accessibility text sizes.
+    self.tableView.sectionFooterHeight = 0;
+    self.tableView.estimatedSectionFooterHeight = 0;
+    UITableViewHeaderFooterView *footer = [[UITableViewHeaderFooterView alloc] initWithReuseIdentifier:nil];
+    UIListContentConfiguration *guidance = [UIListContentConfiguration footerConfiguration];
+    guidance.text = @"Tap an app to confirm permanent clearing. Close it first. Safari and Messages cleanup is best effort.";
+    guidance.textProperties.numberOfLines = 0;
+    footer.contentConfiguration = guidance;
+    self.tableView.tableFooterView = footer;
     UISearchController *search = [[UISearchController alloc] initWithSearchResultsController:nil];
     search.searchResultsUpdater = self;
     search.obscuresBackgroundDuringPresentation = NO;
@@ -242,6 +250,27 @@ static BOOL wq_dir_size_cancellable(NSString *dir, NSString *taskID, WQScanCance
     if (!_scanTask.running && !_scanTask.userPaused && (!_scanTask.result || _scanTask.interrupted)) {
         _resumeScan = _scanTask.interrupted;
         [self scan];
+    }
+}
+
+- (void)viewDidLayoutSubviews
+{
+    [super viewDidLayoutSubviews];
+    UITableViewHeaderFooterView *footer = (UITableViewHeaderFooterView *)self.tableView.tableFooterView;
+    CGFloat width = CGRectGetWidth(self.tableView.bounds);
+    if (!footer || width <= 0) return;
+    CGRect frame = footer.frame;
+    frame.size.width = width;
+    footer.frame = frame;
+    [footer setNeedsLayout];
+    [footer layoutIfNeeded];
+    CGSize size = [footer.contentView systemLayoutSizeFittingSize:CGSizeMake(width, UILayoutFittingCompressedSize.height)
+        withHorizontalFittingPriority:UILayoutPriorityRequired verticalFittingPriority:UILayoutPriorityFittingSizeLevel];
+    CGFloat height = ceil(size.height);
+    if (fabs(CGRectGetHeight(footer.frame) - height) > 0.5) {
+        frame.size.height = height;
+        footer.frame = frame;
+        self.tableView.tableFooterView = footer;
     }
 }
 
@@ -495,22 +524,6 @@ static BOOL wq_dir_size_cancellable(NSString *dir, NSString *taskID, WQScanCance
                                  (unsigned long)_apps.count, wq_size_text(total));
     return WQLocalizedFormat(_apps.count == 1 ? @"%lu app · %@ of app data" : @"%lu apps · %@ of app data",
                              (unsigned long)_apps.count, wq_size_text(total));
-}
-
-- (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section
-{
-    return @"Tap an app to confirm permanent clearing. Close it first. Safari and Messages cleanup is best effort.";
-}
-
-- (UIView *)tableView:(UITableView *)tableView viewForFooterInSection:(NSInteger)section
-{
-    UITableViewHeaderFooterView *footer = [tableView dequeueReusableHeaderFooterViewWithIdentifier:@"appsFooter"]
-        ?: [[UITableViewHeaderFooterView alloc] initWithReuseIdentifier:@"appsFooter"];
-    UIListContentConfiguration *content = [UIListContentConfiguration footerConfiguration];
-    content.text = [self tableView:tableView titleForFooterInSection:section];
-    content.textProperties.numberOfLines = 0;
-    footer.contentConfiguration = content;
-    return footer;
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath

@@ -70,6 +70,22 @@ static UIViewController *CHTop(UIViewController *controller)
         else return controller;
     }
 }
+static UIScrollView *CHScrollableWarning(UIView *view)
+{
+    if (view.hidden || view.alpha < 0.01) return nil;
+    if ([view isKindOfClass:UIScrollView.class]) {
+        UIScrollView *scroll = (UIScrollView *)view;
+        CGFloat bottom = MAX(-scroll.adjustedContentInset.top,
+            scroll.contentSize.height - scroll.bounds.size.height + scroll.adjustedContentInset.bottom);
+        if (scroll.scrollEnabled && scroll.bounds.size.height > 20 && bottom - scroll.contentOffset.y > 1)
+            return scroll;
+    }
+    for (UIView *child in view.subviews) {
+        UIScrollView *scroll = CHScrollableWarning(child);
+        if (scroll) return scroll;
+    }
+    return nil;
+}
 static BOOL CHHasMenuView(UIView *view)
 {
     if (view.hidden || view.alpha < 0.01) return NO;
@@ -130,6 +146,8 @@ static WQCacheItem *CHCacheRow(NSString *name, NSString *bundle)
 @property (nonatomic, strong) NSMutableArray *steps;
 @property (nonatomic, strong) NSMutableArray *missing;
 @property (nonatomic) NSUInteger sequence;
+@property (nonatomic) NSUInteger captureOrdinal, warningPage;
+@property (nonatomic, copy) NSString *captureIdentifier, *captureTitle, *captureNote;
 @property (nonatomic) BOOL keyboardVisible;
 @property (nonatomic) BOOL keepAlertAfterCapture;
 @property (nonatomic) BOOL pendingUIAction;
@@ -180,6 +198,21 @@ static WQCacheItem *CHCacheRow(NSString *name, NSString *bundle)
     NSString *ack = [NSString stringWithContentsOfFile:CHControl(@"capture-ack.txt") encoding:NSUTF8StringEncoding error:nil];
     if ([ack isEqualToString:identifier]) {
         [NSFileManager.defaultManager removeItemAtPath:CHControl(@"capture-ack.txt") error:nil];
+        UIViewController *top = CHTop(self.window.rootViewController);
+        UIScrollView *warning = [top isKindOfClass:UIAlertController.class] ? CHScrollableWarning(top.view) : nil;
+        if (warning) {
+            if (self.warningPage >= 30) { [self fail:@"Native warning scrolling did not reach the end"]; return; }
+            CGFloat bottom = MAX(-warning.adjustedContentInset.top,
+                warning.contentSize.height - warning.bounds.size.height + warning.adjustedContentInset.bottom);
+            CGFloat previous = warning.contentOffset.y;
+            [warning setContentOffset:CGPointMake(warning.contentOffset.x,
+                MIN(bottom, previous + warning.bounds.size.height * 0.8)) animated:NO];
+            [warning layoutIfNeeded];
+            if (warning.contentOffset.y <= previous + 0.5) { [self fail:@"Native warning refused the required scroll"]; return; }
+            self.warningPage++;
+            [self later:^{ [self publishCapture]; }];
+            return;
+        }
         dispatch_block_t after = self.afterCapture;
         self.afterCapture = nil;
         BOOL keepAlert = self.keepAlertAfterCapture;
@@ -196,6 +229,18 @@ static WQCacheItem *CHCacheRow(NSString *name, NSString *bundle)
         else [self dismissThen:advance];
     } else dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 100 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{ [self awaitAck:identifier]; });
 }
+- (void)publishCapture
+{
+    NSString *identifier = self.warningPage ? [self.captureIdentifier stringByAppendingFormat:@"-scroll-%lu", (unsigned long)self.warningPage] : self.captureIdentifier;
+    NSString *title = self.warningPage ? [self.captureTitle stringByAppendingFormat:@" — warning scrolled %lu", (unsigned long)self.warningPage] : self.captureTitle;
+    NSString *note = self.warningPage ? [self.captureNote stringByAppendingString:@"; actual native alert scrolled to expose additional warning text"] : self.captureNote;
+    CHWrite(@"capture-state.json", @{@"id":identifier, @"base_id":self.captureIdentifier, @"title":title, @"note":note,
+        @"sequence":@(++self.captureOrdinal), @"fixture_step":@(self.sequence), @"alert_scroll_page":@(self.warningPage),
+        @"fixture":@YES, @"keyboard_visible":@(self.keyboardVisible),
+        @"appearance":@(self.window.traitCollection.userInterfaceStyle),
+        @"content_size_category":self.window.traitCollection.preferredContentSizeCategory ?: @"unknown"});
+    [self awaitAck:identifier];
+}
 - (void)offer:(NSString *)identifier title:(NSString *)title note:(NSString *)note
 {
     [self later:^{
@@ -209,11 +254,11 @@ static WQCacheItem *CHCacheRow(NSString *name, NSString *bundle)
             if (!visible.view.window) { [self fail:@"Apps/Caches controller is detached after navigation"]; return; }
         }
         if(expected && ![CHTop(self.window.rootViewController).title isEqualToString:expected]) { [self fail:[NSString stringWithFormat:@"Expected visible alert %@; found %@", expected, CHTop(self.window.rootViewController).title]]; return; }
-        CHWrite(@"capture-state.json", @{@"id":identifier, @"title":title, @"note":note ?: @"Disposable fixture data",
-            @"sequence":@(self.sequence), @"fixture":@YES, @"keyboard_visible":@(self.keyboardVisible),
-            @"appearance":@(self.window.traitCollection.userInterfaceStyle),
-            @"content_size_category":self.window.traitCollection.preferredContentSizeCategory ?: @"unknown"});
-        [self awaitAck:identifier];
+        self.captureIdentifier = identifier;
+        self.captureTitle = title;
+        self.captureNote = note ?: @"Disposable fixture data";
+        self.warningPage = 0;
+        [self publishCapture];
     }];
 }
 - (void)dismissThen:(dispatch_block_t)completion
