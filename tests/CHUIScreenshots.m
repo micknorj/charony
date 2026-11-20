@@ -368,6 +368,18 @@ static WQCacheItem *CHCacheRow(NSString *name, NSString *bundle)
         [self offer:@"apps-sort-filter-menu" title:@"Apps — native Sort and Filter menu" note:@"Actual production bar-button menu, opened through accessibility activation"];
     }];
 }
+- (void)captureAccessibleCacheRows:(NSString *)identifier title:(NSString *)title
+{
+    if (!UIContentSizeCategoryIsAccessibilityCategory(self.window.traitCollection.preferredContentSizeCategory)) {
+        [self next]; // Extra scroll frame is only meaningful for enlarged rows.
+        return;
+    }
+    UITableView *table = self.caches.tableView;
+    CGPoint original = table.contentOffset;
+    [table scrollToRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:1] atScrollPosition:UITableViewScrollPositionTop animated:NO];
+    self.afterCapture = ^{ [table setContentOffset:original animated:NO]; };
+    [self offer:identifier title:title note:@"Actual table scrolled to the enlarged cache rows; summary is captured separately"];
+}
 - (void)add:(dispatch_block_t)step { [self.steps addObject:[step copy]]; }
 - (void)buildSteps
 {
@@ -375,6 +387,16 @@ static WQCacheItem *CHCacheRow(NSString *name, NSString *bundle)
     [gallery add:^{ [gallery showTab:0]; [gallery publish:@"apps" rows:@[] note:nil]; [gallery offer:@"apps-initial" title:@"Apps — initial idle fixture" note:nil]; }];
     [gallery add:^{ WQScanTask *task=[WQScanTask taskNamed:@"apps"]; NSUInteger g=[task beginFresh:YES cancel:^{}]; [task progress:@"Finding apps…" fraction:0.28 generation:g]; [gallery offer:@"apps-loading" title:@"Apps — first scan loading" note:@"Fixture scan progress, no completed app model"]; }];
     [gallery add:^{ [gallery seedApps]; [gallery offer:@"apps-populated" title:@"Apps — populated storage rows" note:@"Bundle IDs and sizes are for disposable fixture containers; there is no separate details screen"]; }];
+    [gallery add:^{
+        UITableView *table = gallery.apps.tableView;
+        [table layoutIfNeeded];
+        CGFloat bottom = MAX(-table.adjustedContentInset.top, table.contentSize.height - table.bounds.size.height + table.adjustedContentInset.bottom);
+        if (bottom <= table.contentOffset.y + 1) { [gallery next]; return; }
+        CGPoint original = table.contentOffset;
+        [table setContentOffset:CGPointMake(original.x, bottom) animated:NO];
+        gallery.afterCapture = ^{ [table setContentOffset:original animated:NO]; };
+        [gallery offer:@"apps-safety-guidance-scrolled" title:@"Apps — guidance after the list" note:@"Actual nonfloating safety footer reached by scrolling the table"];
+    }];
     [gallery add:^{ [gallery captureFilterMenu]; }];
     [gallery add:^{ [gallery seedAlphabetApps]; gallery.afterCapture=^{[gallery.apps setValue:@NO forKey:@"sortByName"];}; [gallery offer:@"apps-alphabet-index" title:@"Apps — name sort and alphabet index" note:@"26 distinct disposable containers; actual alphabetical sidebar appears for name-sorted lists of at least 25 rows"]; }];
     [gallery add:^{ NSMutableArray *rows=[gallery.appRows mutableCopy]; NSMutableDictionary *partial=[rows[0] mutableCopy]; partial[@"sizeKnown"]=@NO; rows[0]=partial; [gallery publish:@"apps" rows:rows note:nil]; [gallery offer:@"apps-storage-incomplete" title:@"Apps — incomplete storage measurement" note:@"Fixture measurement has unknown portions; aggregate must be labelled incomplete"]; }];
@@ -398,7 +420,9 @@ static WQCacheItem *CHCacheRow(NSString *name, NSString *bundle)
     [gallery add:^{ [gallery showTab:1]; [gallery publish:@"clean" rows:@[] note:nil]; [gallery offer:@"caches-initial" title:@"Caches — initial idle fixture" note:nil]; }];
     [gallery add:^{ WQScanTask *t=[WQScanTask taskNamed:@"clean"]; NSUInteger g=[t beginFresh:YES cancel:^{}]; [t progress:@"Finding apps…" fraction:0.35 generation:g]; [gallery.caches setValue:@0.35 forKey:@"scanProgress"]; [gallery.caches.tableView reloadData]; [gallery offer:@"caches-loading" title:@"Caches — loading" note:@"Fixture-driven scan status"]; }];
     [gallery add:^{ [gallery seedCaches]; [gallery offer:@"caches-populated" title:@"Caches — populated, no selection" note:nil]; }];
+    [gallery add:^{ [gallery captureAccessibleCacheRows:@"caches-accessibility-rows" title:@"Caches — enlarged rows, unselected"]; }];
     [gallery add:^{ for(NSUInteger i=0;i<2;i++) [gallery.caches tableView:gallery.caches.tableView didSelectRowAtIndexPath:[NSIndexPath indexPathForRow:(NSInteger)i inSection:1]]; [gallery offer:@"caches-selected" title:@"Caches — manual multiple selection" note:nil]; }];
+    [gallery add:^{ [gallery captureAccessibleCacheRows:@"caches-selected-accessibility-rows" title:@"Caches — enlarged rows, selected"]; }];
     [gallery add:^{ [gallery search:gallery.caches query:@""]; [gallery offer:@"caches-search-active" title:@"Caches — contextual Search active" note:nil]; }];
     [gallery add:^{ [gallery search:gallery.caches query:@"Maps"]; [gallery offer:@"caches-search-results" title:@"Caches — search matches" note:nil]; }];
     [gallery add:^{ [gallery search:gallery.caches query:@"no-matching-fixture"]; [gallery offer:@"caches-search-no-results" title:@"Caches — no search results" note:nil]; }];
