@@ -139,9 +139,11 @@ static void runActiveSearchNavigationFixtures(UITabBarController *tabs, WQAppsVi
 }
 // Drive real scan notifications without container access. The original
 // harness seeded a completed result before showing Apps, missing first scans.
-static void runAppListStateFixtures(void)
+static void runAppListStateFixtures(UIWindow *window)
 {
     CHFixtureApps *controller = [CHFixtureApps new];
+    window.rootViewController = [[UINavigationController alloc] initWithRootViewController:controller];
+    [window makeKeyAndVisible];
     [controller loadViewIfNeeded];
     WQScanTask *task = [WQScanTask taskNamed:@"apps"];
     NSUInteger generation = [task beginFresh:YES cancel:^{}];
@@ -167,12 +169,19 @@ static void runAppListStateFixtures(void)
     UITableViewCell *cell = [controller tableView:controller.tableView cellForRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]];
     UIListContentConfiguration *content = (UIListContentConfiguration *)cell.contentConfiguration;
     check([content.text isEqualToString:@"Read-only Fixture"], @"refresh-row-renders-existing-model");
-    controller.view.frame = CGRectMake(0, 0, 375, 812);
-    [controller.view setNeedsLayout];
-    [controller.view layoutIfNeeded];
+    [window setNeedsLayout];
+    [window layoutIfNeeded];
+    [controller.tableView layoutIfNeeded];
     UITableViewHeaderFooterView *footer = (UITableViewHeaderFooterView *)controller.tableView.tableFooterView;
     content = (UIListContentConfiguration *)footer.contentConfiguration;
     check(content.textProperties.numberOfLines == 0 && [content.text containsString:@"Safari and Messages"], @"apps-footer-wraps-the-complete-safety-guidance");
+    NSString *documents = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
+    NSDictionary *geometry = @{@"footer":NSStringFromCGRect(footer.frame),
+        @"row":NSStringFromCGRect([controller.tableView rectForRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]]),
+        @"table":NSStringFromCGRect(controller.tableView.frame), @"attached":@(footer.window != nil)};
+    [[NSJSONSerialization dataWithJSONObject:geometry options:NSJSONWritingPrettyPrinted error:nil]
+        writeToFile:[documents stringByAppendingPathComponent:@"footer-layout.log"] atomically:YES];
+    check(footer.window != nil, @"apps-guidance-is-tested-in-a-visible-window");
     check(CGRectGetHeight(footer.frame) > 0 &&
           CGRectGetMinY(footer.frame) >= CGRectGetMaxY([controller.tableView rectForRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]]),
           @"apps-guidance-follows-rows-without-a-floating-section-footer");
@@ -369,7 +378,8 @@ static void runCacheBatchFixtures(UIWindow *window, dispatch_block_t next)
         });
         return;
     }
-    runAppListStateFixtures();
+    self.window = [[UIWindow alloc] initWithWindowScene:(UIWindowScene *)scene];
+    runAppListStateFixtures(self.window);
     NSDictionary *row = @{@"name": @"Disposable Fixture", @"bundleID": @"com.example.fixture", @"container": @"/fixture", @"containerPath": @"/fixture", @"hasAccess": @YES, @"hasIdentity": @YES, @"bytes": @123, @"cacheBytes": @123, @"limited": @YES};
     for (NSString *name in @[@"apps", @"clean"]) {
         WQScanTask *task = [WQScanTask taskNamed:name];
@@ -380,7 +390,6 @@ static void runCacheBatchFixtures(UIWindow *window, dispatch_block_t next)
         [task finish:@{@"rows": rows, @"note": @"", @"complete": @YES} generation:generation];
     }
     wq_scan_lifecycle_install();
-    self.window = [[UIWindow alloc] initWithWindowScene:(UIWindowScene *)scene];
     UITabBarController *tabs = [NSClassFromString(@"CHTabs") new];
     self.window.rootViewController = tabs;
     [self.window makeKeyAndVisible];

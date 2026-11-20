@@ -25,16 +25,23 @@ xcrun simctl install "$WQ_SIMULATOR_UDID" "$APP"
 DATA=$(xcrun simctl get_app_container "$WQ_SIMULATOR_UDID" "$BUNDLE" data)
 # Markers must belong to this run. The installed fixture bundle is test-only.
 rm -f -- "$DATA/Documents/ready-for-background" "$DATA/Documents/background-paused" \
-    "$DATA/Documents/ready-to-terminate" "$DATA/Documents/recovery-passed" "$DATA/Documents/search-navigation.log" "$DATA/Documents/FAIL-"*
+    "$DATA/Documents/ready-to-terminate" "$DATA/Documents/recovery-passed" \
+    "$DATA/Documents/search-navigation.log" "$DATA/Documents/footer-layout.log" "$DATA/Documents/FAIL-"*
+retain_diagnostics() {
+    local diagnostic
+    for diagnostic in search-navigation footer-layout; do
+        if [[ -f "$DATA/Documents/$diagnostic.log" ]]; then
+            cp "$DATA/Documents/$diagnostic.log" "$OUT/$diagnostic.log"
+            cat "$OUT/$diagnostic.log"
+        fi
+    done
+}
 wait_marker() {
     local marker=$1
     for ((attempt=0; attempt<60; attempt++)); do
         if compgen -G "$DATA/Documents/FAIL-*" >/dev/null; then
             ls "$DATA/Documents/FAIL-"*
-            if [[ -f "$DATA/Documents/search-navigation.log" ]]; then
-                cp "$DATA/Documents/search-navigation.log" "$OUT/search-navigation.log"
-                cat "$OUT/search-navigation.log"
-            fi
+            retain_diagnostics
             return 1
         fi
         if [[ -f "$DATA/Documents/$marker" ]]; then return 0; fi
@@ -52,6 +59,7 @@ wait_marker ready-to-terminate
 xcrun simctl terminate "$WQ_SIMULATOR_UDID" "$BUNDLE"
 xcrun simctl launch "$WQ_SIMULATOR_UDID" "$BUNDLE" recover
 wait_marker recovery-passed
+retain_diagnostics
 xcrun simctl io "$WQ_SIMULATOR_UDID" screenshot "$OUT/recovery.png"
 xcrun simctl terminate "$WQ_SIMULATOR_UDID" "$BUNDLE"
 printf 'UIKit, lifecycle and cold-relaunch fixtures passed. Artifacts in %s\n' "$OUT"
