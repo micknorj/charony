@@ -75,15 +75,28 @@ elif name == 'xcrun':
     elif args[0] == 'actool':
         fail('assets')
         destination = Path(args[args.index('--compile') + 1])
-        assert (Path(args[1]) / 'AppIcon.appiconset' / 'Charon.png').exists()
+        assert (Path(args[1]) / 'icon.json').is_file()
         if failure != 'missing-assets':
             (destination / 'Assets.car').write_bytes(b'fixture asset catalog')
         partial = Path(args[args.index('--output-partial-info-plist') + 1])
         partial.write_bytes(plistlib.dumps({'CFBundleIcons': {'CFBundlePrimaryIcon': {'CFBundleIconName': 'AppIcon'}}}))
+    elif args[0] == 'assetutil':
+        entries = []
+        for name in ['01-moon', '02-terrain', '03-craters']:
+            entries.append({'AssetType': 'Vector', 'Name': 'AppIcon_Assets/' + name})
+        for appearance in ['UIAppearanceLight', 'UIAppearanceDark', 'ISAppearanceTintable']:
+            groups = []
+            for name in ['01 Moon', '02 Terrain', '03 Craters']:
+                group = {'AssetType': 'IconGroup', 'Name': 'AppIcon/' + name, 'Appearance': appearance,
+                         'Layers': [{'LayerHasLightingEffects': name == '01 Moon'}]}
+                groups.append(group)
+                entries.append(group)
+            entries.append({'AssetType': 'IconImageStack', 'Name': 'AppIcon', 'Appearance': appearance,
+                            'LayerCount': 4, 'CanvasWidth': 1024, 'CanvasHeight': 1024,
+                            'CompositeImagePresent': False, 'Layers': groups})
+        print(json.dumps([] if failure == 'flat-icon' else entries))
     else:
         raise SystemExit('unexpected xcrun arguments')
-elif name == 'sips':
-    shutil.copyfile(args[3], args[args.index('--out') + 1])
 elif name == 'codesign':
     app = Path(args[-1])
     if args[0] == '--force':
@@ -123,7 +136,7 @@ else:
 
 def install_tools(directory):
     directory.mkdir()
-    for name in ['plutil', 'PlistBuddy', 'xcrun', 'sips', 'codesign', 'nm', 'strings', 'zip']:
+    for name in ['plutil', 'PlistBuddy', 'xcrun', 'codesign', 'nm', 'strings', 'zip']:
         path = directory / name
         path.write_text(TOOL)
         path.chmod(0o755)

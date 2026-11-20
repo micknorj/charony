@@ -63,6 +63,8 @@ jobs:
         run: |
           set -euo pipefail
           bash build.sh 2>&1 | tee .ci-results/build.log
+      - name: Verify native icon renderings and surface detail
+        run: bash tests/run_icon_tests.sh
       - name: Create disposable simulator and run UIKit fixtures
         env:
           SIMULATOR_RUNTIME: ${{ steps.toolchain.outputs.simulator_runtime }}

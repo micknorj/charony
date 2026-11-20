@@ -35,23 +35,16 @@ if [[ "$BINARY_ARCHITECTURES" != arm64 ]]; then
     exit 1
 fi
 cp Info.plist LICENSE NOTICE.md "$APP/"
-# Flat development artwork only. Layered Icon Composer appearances remain a release gate.
-CATALOG="$OUT/Icons.xcassets"
-mkdir -p "$CATALOG/AppIcon.appiconset"
-sips -z 1024 1024 icons/Charon-source.png --out "$CATALOG/AppIcon.appiconset/Charon.png" >/dev/null
-cat > "$CATALOG/Contents.json" <<'JSON'
-{"info":{"author":"xcode","version":1}}
-JSON
-cat > "$CATALOG/AppIcon.appiconset/Contents.json" <<'JSON'
-{"images":[{"filename":"Charon.png","idiom":"universal","platform":"ios","size":"1024x1024"}],"info":{"author":"xcode","version":1}}
-JSON
-xcrun actool "$CATALOG" --compile "$APP" --platform iphoneos --minimum-deployment-target "$MIN_OS" \
-    --target-device iphone --target-device ipad --app-icon AppIcon \
+# Compile the editable Icon Composer project; no flattened source/fallback catalog.
+xcrun actool icons/AppIcon.icon --compile "$APP" --platform iphoneos --minimum-deployment-target "$MIN_OS" \
+    --target-device iphone --target-device ipad --app-icon AppIcon --standalone-icon-behavior all \
     --output-partial-info-plist "$OUT/icon-info.plist" --errors --warnings --output-format human-readable-text
 if [[ ! -f "$APP/Assets.car" ]]; then
     echo 'Asset catalog was not compiled.' >&2
     exit 1
 fi
+xcrun assetutil --info "$APP/Assets.car" > "$OUT/icon-assets.json"
+python3 scripts/verify_icon.py "$OUT/icon-assets.json"
 python3 - "$APP/Info.plist" "$OUT/icon-info.plist" <<'PY'
 import plistlib, sys
 from pathlib import Path
@@ -82,4 +75,4 @@ python3 - "$OUT/charony.ipa" "$FINAL_IPA" <<'PY'
 import os, sys
 os.replace(sys.argv[1], sys.argv[2])
 PY
-printf 'Development IPA written to %s. Layered icon and physical-device gates remain pending.\n' "$FINAL_IPA"
+printf 'Development IPA written to %s. Native icon compiled; final signing and physical-device gates remain pending.\n' "$FINAL_IPA"

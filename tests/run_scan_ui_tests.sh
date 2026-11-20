@@ -18,6 +18,19 @@ cp Info.plist "$APP/Info.plist"
 /usr/libexec/PlistBuddy -c 'Delete :CFBundleSupportedPlatforms' "$APP/Info.plist"
 /usr/libexec/PlistBuddy -c 'Set :CFBundleIdentifier io.github.micknorj.charony.ui-fixtures' "$APP/Info.plist"
 /usr/libexec/PlistBuddy -c 'Set :CFBundleExecutable CHUITests' "$APP/Info.plist"
+xcrun actool icons/AppIcon.icon --compile "$APP" --platform iphonesimulator --minimum-deployment-target 26.0 \
+    --target-device iphone --target-device ipad --app-icon AppIcon --standalone-icon-behavior all \
+    --output-partial-info-plist "$OUT/icon-info.plist" --errors --warnings --output-format human-readable-text
+xcrun assetutil --info "$APP/Assets.car" > "$OUT/icon-assets.json"
+python3 scripts/verify_icon.py "$OUT/icon-assets.json"
+python3 - "$APP/Info.plist" "$OUT/icon-info.plist" <<'PYICON'
+import plistlib, sys
+from pathlib import Path
+info_path = Path(sys.argv[1])
+info = plistlib.loads(info_path.read_bytes())
+info.update(plistlib.loads(Path(sys.argv[2]).read_bytes()))
+info_path.write_bytes(plistlib.dumps(info))
+PYICON
 codesign --force --sign - "$APP"
 BUNDLE=io.github.micknorj.charony.ui-fixtures
 xcrun simctl install "$WQ_SIMULATOR_UDID" "$APP"

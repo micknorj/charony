@@ -79,7 +79,7 @@ class BuildPipelineTests(unittest.TestCase):
 
     def test_pipeline_failures_preserve_existing_artifact_and_clean_staging(self):
         for phase in ['compile', 'architecture', 'assets', 'missing-assets', 'privacy', 'sign', 'verify',
-                      'entitlements', 'lookalike-group', 'zip', 'package', 'verify_unpacked']:
+                      'entitlements', 'lookalike-group', 'flat-icon', 'zip', 'package', 'verify_unpacked']:
             with self.subTest(phase=phase):
                 self.events_path.unlink(missing_ok=True)
                 final = self.project / 'charony.ipa'
@@ -101,6 +101,8 @@ class BuildPipelineTests(unittest.TestCase):
                 if phase in ['entitlements', 'lookalike-group']:
                     self.assertTrue(any(event[:2] == ['codesign', '-d'] for event in events), result.stderr)
                     self.assertIn('Signed entitlements differ', result.stderr)
+                if phase == 'flat-icon':
+                    self.assertIn('lost separate vector artwork', result.stderr)
                 if phase == 'zip':
                     self.assertIn('injected zip failure', result.stderr)
                 if phase == 'package':

@@ -18,6 +18,9 @@ static BOOL CHFixtureGrant(NSString *path)
 #define main CHProductionMain
 #import "../main.m"
 #undef main
+@interface UIImage (CHInstalledIconFixture)
++ (UIImage *)_applicationIconImageForBundleIdentifier:(NSString *)bundleID format:(int)format scale:(CGFloat)scale;
+@end
 static void marker(NSString *name)
 {
     NSString *documents = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
@@ -880,6 +883,13 @@ static void runRecoveryConsentFixtures(UIWindow *window, dispatch_block_t next)
 {
     (void)session; (void)options;
     phase(@"scene-connect");
+    NSDictionary *primaryIcon = NSBundle.mainBundle.infoDictionary[@"CFBundleIcons"][@"CFBundlePrimaryIcon"];
+    check([primaryIcon[@"CFBundleIconName"] isEqualToString:@"AppIcon"] &&
+          [NSBundle.mainBundle pathForResource:@"Assets" ofType:@"car"] != nil,
+          @"simulator-installs-the-compiled-layered-icon-and-metadata");
+    UIImage *installedIcon = [UIImage _applicationIconImageForBundleIdentifier:NSBundle.mainBundle.bundleIdentifier format:2 scale:2];
+    check(installedIcon.size.width >= 60 && installedIcon.size.height >= 60,
+          @"simulator-registers-a-real-application-icon-in-each-appearance");
     if ([NSProcessInfo.processInfo.arguments containsObject:@"recover"]) {
         WQScanTask *apps = [WQScanTask taskNamed:@"apps"];
         WQScanTask *clean = [WQScanTask taskNamed:@"clean"];

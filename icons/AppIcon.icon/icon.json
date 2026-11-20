@@ -14,41 +14,42 @@
   ],
   "groups": [
     {
-      "name": "01 Moon",
+      "name": "03 Craters",
       "layers": [
         {
-          "image-name": "01-moon.svg",
-          "name": "01-moon",
+          "image-name": "03-craters.svg",
+          "name": "03-craters",
           "fill-specializations": [
             {
               "value": {
-                "solid": "srgb:0.81176,0.83529,0.84706,1.00000"
+                "solid": "srgb:0.36471,0.40784,0.45098,1.00000"
               }
             },
             {
               "appearance": "dark",
               "value": {
-                "solid": "srgb:0.66275,0.70588,0.73333,1.00000"
+                "solid": "srgb:0.27059,0.30980,0.35294,1.00000"
               }
             },
             {
               "appearance": "tinted",
               "value": {
-                "solid": "gray:0.85000,1.00000"
+                "solid": "gray:0.25000,1.00000"
               }
             }
           ],
-          "glass": true
+          "glass": false
         }
       ],
+      "opacity": 0.16,
       "shadow": {
-        "kind": "neutral",
-        "opacity": 0.2
+        "kind": "none",
+        "opacity": 0
       },
-      "specular": true,
+      "specular": false,
       "translucency": {
-        "enabled": true,
-        "value": 0.18
+        "enabled": false,
+        "value": 0.5
       }
     },
     {
@@ -91,42 +92,41 @@
       }
     },
     {
-      "name": "03 Craters",
+      "name": "01 Moon",
       "layers": [
         {
-          "image-name": "03-craters.svg",
-          "name": "03-craters",
+          "image-name": "01-moon.svg",
+          "name": "01-moon",
           "fill-specializations": [
             {
               "value": {
-                "solid": "srgb:0.36471,0.40784,0.45098,1.00000"
+                "solid": "srgb:0.81176,0.83529,0.84706,1.00000"
               }
             },
             {
               "appearance": "dark",
               "value": {
-                "solid": "srgb:0.27059,0.30980,0.35294,1.00000"
+                "solid": "srgb:0.66275,0.70588,0.73333,1.00000"
               }
             },
             {
               "appearance": "tinted",
               "value": {
-                "solid": "gray:0.25000,1.00000"
+                "solid": "gray:0.85000,1.00000"
               }
             }
           ],
-          "glass": false
+          "glass": true
         }
       ],
-      "opacity": 0.16,
       "shadow": {
-        "kind": "none",
-        "opacity": 0
+        "kind": "neutral",
+        "opacity": 0.2
       },
-      "specular": false,
+      "specular": true,
       "translucency": {
-        "enabled": false,
-        "value": 0.5
+        "enabled": true,
+        "value": 0.18
       }
     }
   ],

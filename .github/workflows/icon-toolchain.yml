@@ -29,12 +29,7 @@ jobs:
             --app-icon AppIcon --standalone-icon-behavior all \
             --output-partial-info-plist .icon-results/icon-info.plist --errors --warnings \
             --output-format human-readable-text 2>&1 | tee .icon-results/compile.log
-          for RENDITION in Default Dark TintedLight TintedDark; do
-            "$TOOL" icons/AppIcon.icon --export-image --output-file ".icon-results/$RENDITION.png" \
-              --platform iOS --rendition "$RENDITION" --width 1024 --height 1024 --scale 1 --light-angle -45
-          done
-          "$TOOL" icons/AppIcon.icon --export-image --output-file .icon-results/tinted-color.png \
-            --platform iOS --rendition TintedDark --width 1024 --height 1024 --scale 1 --tint-color 0.58 --tint-strength 0.7
+          bash tests/run_icon_tests.sh
           xcrun --find assetutil
           xcrun assetutil --info .icon-results/compiled/Assets.car > .icon-results/asset-info.json
       - name: Retain native tool evidence
@@ -42,7 +37,9 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: native-icon-toolchain-evidence
-          path: .icon-results/
+          path: |
+            .icon-results/
+            .ci-results/icons/
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 14
