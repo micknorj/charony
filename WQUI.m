@@ -21,10 +21,13 @@ void wq_prepare_list(UITableViewController *host, NSString *title)
 {
     host.title = title;
     host.view.maximumContentSizeCategory = UIContentSizeCategoryLarge;
+    host.navigationController.view.maximumContentSizeCategory = UIContentSizeCategoryLarge;
+    host.navigationController.navigationBar.maximumContentSizeCategory = UIContentSizeCategoryLarge;
     host.navigationItem.largeTitleDisplayMode = UINavigationItemLargeTitleDisplayModeNever;
     host.navigationItem.title = @"";
     UILabel *label = [UILabel new];
     label.text = title;
+    label.maximumContentSizeCategory = UIContentSizeCategoryLarge;
     label.font = wq_font(UIFontTextStyleHeadline, host.traitCollection);
     label.adjustsFontForContentSizeCategory = YES;
     label.accessibilityTraits |= UIAccessibilityTraitHeader;
@@ -37,7 +40,7 @@ void wq_prepare_list(UITableViewController *host, NSString *title)
     host.tableView.estimatedSectionFooterHeight = 0;
 }
 
-void wq_empty_message(UITableView *table, NSString *message)
+void wq_empty_message(UITableView *table, NSString *message, float fraction)
 {
     if (!message.length) { table.backgroundView = nil; return; }
     UIView *background = [UIView new];
@@ -48,12 +51,21 @@ void wq_empty_message(UITableView *table, NSString *message)
     label.textColor = UIColor.secondaryLabelColor;
     label.font = wq_font(UIFontTextStyleBody, table.traitCollection);
     label.adjustsFontForContentSizeCategory = YES;
-    label.translatesAutoresizingMaskIntoConstraints = NO;
-    [background addSubview:label];
+    UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:@[label]];
+    stack.axis = UILayoutConstraintAxisVertical;
+    stack.spacing = 12;
+    if (fraction >= 0) {
+        UIProgressView *progress = [[UIProgressView alloc] initWithProgressViewStyle:UIProgressViewStyleDefault];
+        progress.progress = MIN(1.0f, fraction);
+        progress.accessibilityLabel = @"Scan progress";
+        [stack addArrangedSubview:progress];
+    }
+    stack.translatesAutoresizingMaskIntoConstraints = NO;
+    [background addSubview:stack];
     [NSLayoutConstraint activateConstraints:@[
-        [label.leadingAnchor constraintEqualToAnchor:background.leadingAnchor constant:24],
-        [label.trailingAnchor constraintEqualToAnchor:background.trailingAnchor constant:-24],
-        [label.centerYAnchor constraintEqualToAnchor:background.centerYAnchor],
+        [stack.leadingAnchor constraintEqualToAnchor:background.leadingAnchor constant:24],
+        [stack.trailingAnchor constraintEqualToAnchor:background.trailingAnchor constant:-24],
+        [stack.centerYAnchor constraintEqualToAnchor:background.centerYAnchor],
     ]];
     table.backgroundView = background;
 }

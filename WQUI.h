@@ -19,7 +19,7 @@ NS_ASSUME_NONNULL_BEGIN
 void wq_configure_window(UIWindow *window);
 UIFont *wq_font(UIFontTextStyle style, UITraitCollection *traits);
 void wq_prepare_list(UITableViewController *host, NSString *title);
-void wq_empty_message(UITableView *table, NSString *_Nullable message);
+void wq_empty_message(UITableView *table, NSString *_Nullable message, float fraction);
 UIBarButtonItem *wq_refresh_button(id target, SEL action, BOOL enabled);
 
 dispatch_queue_t wq_io(void);

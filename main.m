@@ -29,9 +29,13 @@
     self.traitOverrides.horizontalSizeClass = UIUserInterfaceSizeClassCompact;
     UINavigationController *apps = [[UINavigationController alloc] initWithRootViewController:[WQAppsViewController new]];
     UINavigationController *caches = [[UINavigationController alloc] initWithRootViewController:[WQCacheCleanerViewController new]];
+    apps.navigationBar.maximumContentSizeCategory = UIContentSizeCategoryLarge;
+    caches.navigationBar.maximumContentSizeCategory = UIContentSizeCategoryLarge;
+    self.tabBar.maximumContentSizeCategory = UIContentSizeCategoryLarge;
     UITab *appsTab = [[UITab alloc] initWithTitle:@"Apps" image:[UIImage systemImageNamed:@"square.grid.2x2"] identifier:@"apps" viewControllerProvider:^UIViewController *(UITab *__unused tab) { return apps; }];
     UITab *cachesTab = [[UITab alloc] initWithTitle:@"Caches" image:[UIImage systemImageNamed:@"sparkles"] identifier:@"caches" viewControllerProvider:^UIViewController *(UITab *__unused tab) { return caches; }];
     self.searchNavigation = [[UINavigationController alloc] initWithRootViewController:[UIViewController new]];
+    self.searchNavigation.navigationBar.maximumContentSizeCategory = UIContentSizeCategoryLarge;
     __weak CHTabs *weakSelf = self;
     self.searchTab = [[UISearchTab alloc] initWithViewControllerProvider:^UIViewController *(UITab *__unused tab) { return weakSelf.searchNavigation; }];
     self.tabs = @[appsTab, cachesTab, self.searchTab];

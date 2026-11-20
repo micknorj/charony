@@ -184,7 +184,7 @@ static BOOL wq_dir_size_cancellable(NSString *dir, NSString *taskID, WQScanCance
         message = (_query.length || _filter > 0) ? @"No results" :
             (_shownScanResult ? @"No accessible apps" : @"Refresh to update");
     }
-    wq_empty_message(self.tableView, self.visibleApps.count ? nil : message);
+    wq_empty_message(self.tableView, self.visibleApps.count ? nil : message, _scanning && !_scanTask.paused ? _fraction : -1);
     [self.tableView reloadData];
     [self updateButtons];
 }

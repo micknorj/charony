@@ -36,6 +36,12 @@ static NSString *visibleLabelText(UIView *view)
     for (UIView *child in view.subviews) [parts addObject:visibleLabelText(child)];
     return [parts componentsJoinedByString:@" "];
 }
+static UIProgressView *findProgress(UIView *view)
+{
+    if ([view isKindOfClass:UIProgressView.class]) return (UIProgressView *)view;
+    for (UIView *child in view.subviews) { UIProgressView *progress = findProgress(child); if (progress) return progress; }
+    return nil;
+}
 static void checkRowLayout(UITableView *table, NSIndexPath *index)
 {
     [table scrollToRowAtIndexPath:index atScrollPosition:UITableViewScrollPositionMiddle animated:NO];
@@ -75,7 +81,13 @@ static void runTypographyFixtures(UIWindow *window, UITableViewController *contr
     [controller.tableView reloadData];
     checkRowLayout(controller.tableView, [NSIndexPath indexPathForRow:0 inSection:0]);
     UILabel *title = (UILabel *)controller.navigationItem.leftBarButtonItem.customView;
-    check(title.font.pointSize <= 17.01 && [controller.navigationItem.title isEqualToString:@""], @"small-leading-title-replaces-large-centered-title");
+    NSDictionary *layout = @{@"titleFont":@(title.font.pointSize), @"title":controller.navigationItem.title ?: @"nil",
+        @"leadingTitle":title.text ?: @"nil", @"category":title.traitCollection.preferredContentSizeCategory,
+        @"windowCategory":window.traitCollection.preferredContentSizeCategory};
+    NSString *log = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject stringByAppendingPathComponent:@"ui-layout.log"];
+    [[NSJSONSerialization dataWithJSONObject:layout options:NSJSONWritingPrettyPrinted error:nil] writeToFile:log atomically:YES];
+    check(title.font.pointSize <= 17.01, @"leading-title-never-exceeds-normal-size");
+    check([controller.navigationItem.title isEqualToString:@""], @"leading-title-replaces-centered-title");
     UIFont *large = wq_font(UIFontTextStyleBody, [UITraitCollection traitCollectionWithPreferredContentSizeCategory:UIContentSizeCategoryAccessibilityExtraExtraExtraLarge]);
     UIFont *small = wq_font(UIFontTextStyleBody, [UITraitCollection traitCollectionWithPreferredContentSizeCategory:UIContentSizeCategoryExtraSmall]);
     check(large.pointSize == 17 && small.pointSize < large.pointSize, @"font-limit-allows-smaller-system-sizes");
@@ -263,6 +275,8 @@ static void runAppListStateFixtures(UIWindow *window)
     [task progress:@"Finding apps…" fraction:0.25 generation:generation];
     check([controller.tableView numberOfRowsInSection:0] == 0, @"first-app-scan-has-no-phantom-row");
     check([visibleLabelText(controller.tableView.backgroundView) containsString:@"Finding apps"], @"initial-loading-is-distinct-from-empty");
+    UIProgressView *progress = findProgress(controller.tableView.backgroundView);
+    check(progress && fabs(progress.progress - 0.25) < 0.001, @"first-app-scan-renders-real-progress-without-phantom-rows");
     [task finish:@{@"rows":@[], @"complete":@YES} generation:generation];
     check([controller.tableView numberOfRowsInSection:0] == 0 && [visibleLabelText(controller.tableView.backgroundView) containsString:@"No accessible apps"], @"genuine-empty-app-list-is-distinct");
     generation = [task beginFresh:YES cancel:^{}];
@@ -300,8 +314,10 @@ static void runCacheListStateFixtures(UIWindow *window)
     check([visibleLabelText(controller.tableView.backgroundView) containsString:@"Refresh to update"] && ![WQScanTask taskNamed:@"clean"].running, @"initial-caches-waits-for-explicit-refresh");
     WQScanTask *task = [WQScanTask taskNamed:@"clean"];
     NSUInteger generation = [task beginFresh:YES cancel:^{}];
-    [task progress:@"Finding apps…" fraction:0.3 generation:generation];
+    [controller setStatus:@"Finding apps…" progress:0.3];
     check([controller.tableView numberOfRowsInSection:0] == 0 && [visibleLabelText(controller.tableView.backgroundView) containsString:@"Finding apps"], @"cache-loading-is-distinct-from-empty");
+    UIProgressView *progress = findProgress(controller.tableView.backgroundView);
+    check(progress && fabs(progress.progress - 0.3) < 0.001, @"first-cache-scan-renders-real-progress");
     [task finish:@{@"rows":@[], @"complete":@YES} generation:generation];
     check([visibleLabelText(controller.tableView.backgroundView) containsString:@"No caches found"], @"completed-empty-caches-is-distinct");
     generation = [task beginFresh:YES cancel:^{}];
@@ -798,6 +814,8 @@ static void runRecoveryConsentFixtures(UIWindow *window, dispatch_block_t next)
         self.window.overrideUserInterfaceStyle = UIUserInterfaceStyleLight;
         [self.window layoutIfNeeded];
         check(caches.traitCollection.userInterfaceStyle == UIUserInterfaceStyleLight, @"light-appearance");
+        self.window.overrideUserInterfaceStyle = UIUserInterfaceStyleUnspecified;
+        [self.window layoutIfNeeded];
         tabs.selectedTab = tabs.tabs[0];
         [self.window layoutIfNeeded];
         [apps tableView:apps.tableView didSelectRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]];

@@ -451,7 +451,7 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
     NSString *message = [self statusText];
     if (!self.visibleItems.count && !message.length)
         message = (_query.length || _filter > 0) ? @"No results" : (_shownScanResult ? @"No caches found" : @"Refresh to update");
-    wq_empty_message(self.tableView, self.visibleItems.count ? nil : message);
+    wq_empty_message(self.tableView, self.visibleItems.count ? nil : message, _scanning && !_scanTask.paused ? _scanProgress : -1);
     [self.tableView reloadData];
     [self updateButtons];
 }
@@ -894,7 +894,7 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
             if (cancelled) {
                 self->_status = nil;
                 [self rescanAfterClean:YES];
-                self->_result = WQLocalizedFormat(@"Stopped. Freed %@.%@", wq_size_text(freed),
+                self->_result = WQLocalizedFormat(@"Stopped. Freed about %@.%@", wq_size_text(freed),
                                  allOk ? @"" : WQLocalized(@" Some items could not be removed (access denied or data changed)."));
                 [self updatePresentation];
                 return;
@@ -910,7 +910,7 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
             } else {
                 self->_status = nil;
                 [self rescanAfterClean:YES];
-                self->_result = WQLocalizedFormat(@"Freed %@.%@", wq_size_text(freed),
+                self->_result = WQLocalizedFormat(@"Freed about %@.%@", wq_size_text(freed),
                                  allOk ? @"" : WQLocalized(@" Some items could not be removed (access denied or data changed)."));
                 [self updatePresentation];
             }

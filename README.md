@@ -35,9 +35,11 @@ The development IPA is ad-hoc signed and requires re-signing before installation
 
 ## Usage
 
-1. Open **Apps** to scan accessible applications. Close the target app before selecting it and confirming **Clear Data**. This permanently empties its `Documents`, `Library` and `tmp` contents. No backup is created.
-2. Open **Caches**, tap individual rows to select targets, then review and confirm **Clean**. Cached offline downloads may be removed.
-3. Use **Search** to search the currently selected list. It appears at the bottom-right on iPhone; UIKit places tabs and Search at the top on iPad. Pull to refresh or use **Pause** and **Resume** while scanning.
+1. Open **Apps** and tap **Refresh** to scan accessible applications. Close the target app before selecting it and confirming **Clear Data**. This permanently empties its `Documents`, `Library` and `tmp` contents. No backup is created.
+2. Open **Caches**, tap **Refresh**, then tap individual rows to select targets, then review and confirm **Clean**. Cached offline downloads may be removed.
+3. Use the bottom-right **Search** to search the selected tab. The top-right **…** menu holds filters and **Pause Scan** / **Resume Scan**. Refresh starts a new scan; Resume continues unfinished work.
+
+Rows show logical data-container bytes, excluding app binaries, App Groups and keychain. Fully measured app/extension caches smaller than 64 KB are omitted; accessible nonempty crash reports are listed separately. Application text is capped at the normal system size and allows smaller sizes; VoiceOver remains enabled.
 
 Cache cleaning can be stopped between filesystem items. Cancellation or failure does not restore data already deleted. Reset Access Cache appears only after a recoverable access failure.
 

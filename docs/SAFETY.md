@@ -10,7 +10,7 @@ Charony uses upstream deletion and access primitives with a reduced Apps/Caches 
 
 Traversal, symlink redirection, changed identity, inaccessible targets and Charony's own container are refused. Container/part roots and metadata are retained, emptiness is checked, and partial failures are reported. App Groups, keychain and unrelated containers are outside the operation.
 
-Canceling the confirmation starts no worker. Confirmed full app clearing uses the upstream permanent-clear behavior and has no Stop button. No app-data backup or rollback is created.
+Confirmations requested from active Search wait for native dismissal and restoration of the original controller. Canceling the confirmation starts no worker. Confirmed full app clearing uses the upstream permanent-clear behavior and has no Stop button. No app-data backup or rollback is created.
 
 ### Caches and crash reports
 
@@ -51,6 +51,8 @@ Nine exact upstream safety helpers, including the directory-creation pair needed
 | Independent history removed inherited Git objects | Verified stable archive plus pinned helper fixture; unchanged upstream runner and extraction refusal tests remain active |
 
 See [`tests/WQPurgeTests.m`](../tests/WQPurgeTests.m), [`tests/CHAppDataTests.m`](../tests/CHAppDataTests.m), [`tests/WQScanRecoveryTests.m`](../tests/WQScanRecoveryTests.m), [`tests/CHUITests.m`](../tests/CHUITests.m), [`tests/test_build_pipeline.py`](../tests/test_build_pipeline.py) and [`tests/test_charony.py`](../tests/test_charony.py).
+
+The final functional review also accepts real single-word bundle identifiers without accepting traversal/invalid characters, fails closed outside the approved OS ranges or on malformed build identifiers, and confines inferred service icons to Apple identifiers. These changes do not relax destructive path/identity checks. The no-backup behavior still retains the App Group cache-swap recovery protocol.
 
 ## Baseline failures
 
